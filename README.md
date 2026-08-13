@@ -14,9 +14,13 @@ sequence of performance-gated blocks rather than one long fixed run.
 
 ### Tutorial
 
-Before the main session, the participant runs through a single **tutorial
-block** — `tutorialSize` images (default 4), drawn from the pool before the
-main session's blocks are generated so the two never overlap. It uses a
+Off by default. When enabled (`tutorialEnabled: true`, or pass
+`?tutorial=true`), the participant runs through a single **tutorial
+block** before the main session — `tutorialSize` images (default 4), drawn
+from the pool before the main session's blocks are generated so the two
+never overlap. With the tutorial off, the instructions screen still runs
+once before the main session, with wording adjusted to drop the
+practice-round mention. The tutorial uses a
 simpler pass criterion than regular blocks: every image must be answered
 correctly at least `tutorialMinCorrect` times (default 2) — a plain
 cumulative count, not the rolling-average criterion regular blocks use. It's
@@ -232,6 +236,7 @@ No code changes needed to try different settings:
 
 | Param | Default | Meaning |
 |---|---|---|
+| `tutorial` | `false` | Set to `true` to run a practice tutorial block before the main session |
 | `tutorialSize` | 4 | Number of images in the practice tutorial block, run once before the main session |
 | `tutorialMinCorrect` | 2 | Number of correct responses required per image to pass the tutorial (a cumulative count, not a rolling average) |
 | `blockSizes` | `6,12` | Comma-separated list of possible block sizes; one is chosen at random per block, never repeating the previous block's size (e.g. `6,12,18`) |
@@ -239,7 +244,11 @@ No code changes needed to try different settings:
 | `rollingWindow` | 10 | Number of most recent presentations of an image (within its block) that its rolling accuracy is computed over |
 | `maxAttemptsMultiplier` | 10 | A block (or the tutorial) that hasn't passed after `multiplier * size` trials is left behind (not revisited) and the session moves on |
 | `maxTotalTrials` | 2000 | Safety valve: force-ends the session after this many trials total even if blocks remain unfinished |
-| `spacing` | 100 | Target distance (px) between adjacent positions, used to work out how many rings a block's layout needs |
+| `circleSize` | 60 | Diameter (px) of the peripheral position circles; the central cue/cross is always drawn 10px larger |
+| `spacing` | `circleSize + 40` | Target distance (px) between adjacent positions, used to work out how many rings a block's layout needs. Defaults to a fixed margin around `circleSize` so circles never overlap without hand-tuning both together; pass an explicit value to override |
+| `maxRings` | 2 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |
+| `minRingSize` | 6 | A ring is only added if every ring (including the new one) would still end up with at least this many items once the block splits evenly across them — e.g. a 6-image block always stays on a single ring rather than spreading 3 and 3 across two |
+| `ringSpacing` | `circleSize * 0.75` | Radial gap (px) between consecutive rings. Can safely be a bit less than a full circle diameter since the ring stagger already keeps neighboring rings' circles clear of each other |
 | `feedback` | 1000 | Feedback duration in ms after a response |
 | `iti` | 500 | Inter-trial interval in ms |
 | `fixation` | 500 | Required continuous hover time (ms) on the center cross before the cue is revealed |
@@ -247,10 +256,23 @@ No code changes needed to try different settings:
 | `responseFixation` | 500 | In `response=fixation` mode, required continuous hover time (ms) on a position to select it |
 | `deadline` | 2000 | Max time (ms) to select a position, timed from the start of the response stage. `0` disables it |
 
-The number of rings *within* a block is still computed automatically
+The number of rings *within* a block is computed automatically
 (`computeNumRings` in [js/layout.js](js/layout.js)) from that block's size
-and `spacing`, exactly as before — it's just now recomputed per block since
-block size varies.
+and `spacing`, recomputed per block since block size varies — but capped
+at `maxRings`. Fewer rings means less chance of a participant's cursor
+crossing (and, in `response=fixation` mode, briefly dwelling on) an
+unintended position on an inner ring while travelling out to a position on
+an outer one. The block's positions are then split as evenly as possible
+across those rings (6 and 6 for a 12-image block on 2 rings, not
+proportional to each ring's radius) so every ring has the same angular
+step — combined with the alternating half-step stagger between rings, this
+means an outer ring's positions always fall exactly *between* an inner
+ring's rather than lining up radially with any of them, which is what
+actually keeps a straight path from the center to an outer position from
+crossing directly over an inner one. The tradeoff is that once a block's
+size can't fit within `maxRings` rings at the target `spacing`, every
+ring's radius scales up together instead, so items end up closer together
+than `spacing` as block size grows.
 
 Example: `http://localhost:8765?blockSizes=6,12&criterion=0.75&feedback=600`
 (only 6- or 12-image blocks, a slightly more lenient 75% pass threshold)

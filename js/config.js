@@ -2,7 +2,18 @@
 // quick local iteration, e.g. index.html?blockSizes=6,12&criterion=0.7
 const EXPERIMENT_CONFIG = (function () {
   const params = new URLSearchParams(window.location.search);
-  const itemSpacing = parseInt(params.get("spacing"), 10) || 100;
+
+  // Diameter (px) of the peripheral position circles.
+  const positionDiameter = parseInt(params.get("circleSize"), 10) || 100;
+  // Target distance (px) between adjacent positions. Defaults to a fixed
+  // margin around circleSize so circles never overlap without needing to
+  // hand-tune spacing alongside it; pass ?spacing=... to override outright.
+  const itemSpacing = parseInt(params.get("spacing"), 10) || positionDiameter + 40;
+  // Radial gap (px) between consecutive rings. Defaults to a bit less than
+  // a full circle diameter — the alternating stagger between rings already
+  // keeps a ring's circles clear of its neighbor's, so they can sit closer
+  // together radially than itemSpacing does angularly.
+  const ringSpacing = parseInt(params.get("ringSpacing"), 10) || Math.round(positionDiameter * 0.75);
 
   // Block sizes to cycle through — one is picked at random for each new
   // block. Pass e.g. ?blockSizes=6,12,18 to override the set.
@@ -12,10 +23,23 @@ const EXPERIMENT_CONFIG = (function () {
         .split(",")
         .map((s) => parseInt(s, 10))
         .filter((n) => Number.isInteger(n) && n > 0)
-    : [6, 12];
+    : [6, 12, 18];
 
   return {
     itemSpacing: itemSpacing,
+    positionDiameter: positionDiameter,
+    ringSpacing: ringSpacing,
+    // Caps how many concentric rings a block's layout can use — rings
+    // beyond this cap are never created; instead all rings' radii scale up
+    // together to keep items roughly itemSpacing apart. Keeping this low
+    // limits how many unintended positions a participant's cursor might
+    // cross (and briefly dwell on, in fixation response mode) while
+    // travelling from the center to an outer ring.
+    maxRings: parseInt(params.get("maxRings"), 10) || 2,
+    // A ring is only added if every ring (including the new one) still
+    // ends up with at least this many items, once n is split evenly across
+    // them — keeps small blocks from being spread thin across rings.
+    minRingSize: parseInt(params.get("minRingSize"), 10) || 6,
     feedbackDuration: parseInt(params.get("feedback"), 10) || 1000,
     interTrialInterval: parseInt(params.get("iti"), 10) || 500,
     fixationDuration: parseInt(params.get("fixation"), 10) || 500,
@@ -50,8 +74,10 @@ const EXPERIMENT_CONFIG = (function () {
     // image pool) run before the main session, using its own pass
     // criterion — every image must be answered correctly at least
     // tutorialMinCorrect times (a plain cumulative count, not a rolling
-    // average like the main blocks use).
+    // average like the main blocks use). Off by default; pass
+    // ?tutorial=true to enable it.
+    tutorialEnabled: params.get("tutorial") === "true",
     tutorialSize: parseInt(params.get("tutorialSize"), 10) || 4,
-    tutorialMinCorrect: parseInt(params.get("tutorialMinCorrect"), 10) || 2,
+    tutorialMinCorrect: parseInt(params.get("tutorialMinCorrect"), 10) || 1,
   };
 })();

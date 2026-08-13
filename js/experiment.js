@@ -31,23 +31,33 @@ async function runExperiment() {
   window.jsPsych = jsPsych;
 
   const manifest = await loadStimulusManifest();
-  if (manifest.length < cfg.tutorialSize) {
-    throw new Error(
-      `The image pool (${manifest.length} images) isn't large enough to fill ` +
-        `the tutorial block (${cfg.tutorialSize}).`
-    );
+
+  let tutorialEntries = [];
+  let mainPoolEntries;
+  if (cfg.tutorialEnabled) {
+    if (manifest.length < cfg.tutorialSize) {
+      throw new Error(
+        `The image pool (${manifest.length} images) isn't large enough to fill ` +
+          `the tutorial block (${cfg.tutorialSize}).`
+      );
+    }
+    // The tutorial draws its images up front so they're disjoint from the
+    // main session's pool — no image appears in both.
+    const shuffledManifest = shuffleArray(manifest);
+    tutorialEntries = shuffledManifest.slice(0, cfg.tutorialSize);
+    mainPoolEntries = shuffledManifest.slice(cfg.tutorialSize);
+  } else {
+    mainPoolEntries = shuffleArray(manifest);
   }
-  // The tutorial draws its images up front so they're disjoint from the
-  // main session's pool — no image appears in both.
-  const shuffledManifest = shuffleArray(manifest);
-  const tutorialEntries = shuffledManifest.slice(0, cfg.tutorialSize);
-  const mainPoolEntries = shuffledManifest.slice(cfg.tutorialSize);
 
   const blockQueue = generateBlocks(mainPoolEntries, cfg.blockSizes);
   if (blockQueue.length === 0) {
+    const poolDescription = cfg.tutorialEnabled
+      ? `${mainPoolEntries.length} images left after the tutorial`
+      : `${mainPoolEntries.length} images`;
     throw new Error(
-      `The image pool (${mainPoolEntries.length} images left after the tutorial) isn't ` +
-        `large enough to fill even the smallest block size (${Math.min(...cfg.blockSizes)}).`
+      `The image pool (${poolDescription}) isn't large enough to fill even the ` +
+        `smallest block size (${Math.min(...cfg.blockSizes)}).`
     );
   }
 
@@ -70,7 +80,13 @@ async function runExperiment() {
       size: size,
       stimuli: stimuli,
       positionStimMap: jsPsych.randomization.shuffle(stimuli.map((s) => s.id)),
-      layout: computeLayout(size, { baseRadius: 100, ringSpacing: 100, itemSpacing: cfg.itemSpacing }),
+      layout: computeLayout(size, {
+        baseRadius: 100,
+        ringSpacing: cfg.ringSpacing,
+        itemSpacing: cfg.itemSpacing,
+        maxRings: cfg.maxRings,
+        minRingSize: cfg.minRingSize,
+      }),
       history: {}, // regular blocks: localIdx -> array of recent bool outcomes
       correctCounts: new Array(size).fill(0), // tutorial: localIdx -> cumulative correct count
       trialCount: 0,
@@ -180,8 +196,10 @@ async function runExperiment() {
         "<p>When you're ready to answer, move your mouse to the circle on the edge where you think that object is located." +
         `<p>${selectInstruction}</p>` +
         `<p>${deadlineWarning}</p>`,
-      "<p>You'll start with a short practice round to get the hang of it, then move on to the main task.</p>" +
-        "<p>In the main task, you'll work through a series of sets &mdash; each with its own group of objects to learn. You'll automatically move on to a new set after some time.</p>" +
+      (cfg.tutorialEnabled
+        ? "<p>You'll start with a short practice round to get the hang of it, then move on to the main task.</p>" +
+          "<p>In the main task, you'll work through a series of sets &mdash; each with its own group of objects to learn. You'll automatically move on to a new set after some time.</p>"
+        : "<p>You'll work through a series of sets &mdash; each with its own group of objects to learn. You'll automatically move on to a new set after some time.</p>") +
         '<p>Click "Next" or press the right arrow key to begin.</p>',
     ],
     show_clickable_nav: true,
@@ -224,6 +242,7 @@ async function runExperiment() {
     response_mode: cfg.responseMode,
     response_fixation_duration: cfg.responseFixationDuration,
     response_deadline: cfg.responseDeadline,
+    position_diameter: cfg.positionDiameter,
     on_start: function (trial) {
       const localIdx = Math.floor(Math.random() * activeBlock.size);
       trial.cue_id = localIdx;
@@ -312,13 +331,20 @@ async function runExperiment() {
     choices: "ALL_KEYS",
   };
 
-  // Set up the tutorial as the first active block, before the timeline
-  // starts, so blockTransition/blockPreload/blockTrial have something to
-  // read on their very first run.
-  activeBlock = buildBlock("tutorial", tutorialEntries, cfg.tutorialSize);
-  transitionMessage = "Let's start with a quick practice round.";
-
-  const timeline = [instructions, blockTransition, blockPreload, blockLoop, postTutorialScreen, sessionLoop, debrief];
+  // Set up the first active block, before the timeline starts, so
+  // blockTransition/blockPreload/blockTrial have something to read on
+  // their very first run.
+  let timeline;
+  if (cfg.tutorialEnabled) {
+    activeBlock = buildBlock("tutorial", tutorialEntries, cfg.tutorialSize);
+    transitionMessage = "Let's start with a quick practice round.";
+    timeline = [instructions, blockTransition, blockPreload, blockLoop, postTutorialScreen, sessionLoop, debrief];
+  } else {
+    // No tutorial: seed the first main-session block directly so
+    // sessionLoop's first iteration has an activeBlock to read.
+    advanceToNextBlock();
+    timeline = [instructions, sessionLoop, debrief];
+  }
 
   jsPsych.run(timeline);
 }

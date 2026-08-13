@@ -46,6 +46,10 @@ var jsPsychCircularMemoryGrid = (function (jspsych) {
       response_mode: { type: jspsych.ParameterType.STRING, default: "fixation" },
       response_fixation_duration: { type: jspsych.ParameterType.INT, default: 500 },
       response_deadline: { type: jspsych.ParameterType.INT, default: 2000 },
+      // Diameter (px) of the peripheral position circles. The central
+      // cue/cross is drawn 10px larger than this, preserving the same
+      // visual relationship regardless of size.
+      position_diameter: { type: jspsych.ParameterType.INT, default: 60 },
       // Whether to show the "Hold your mouse over the cross" / "Look away
       // when you're ready to respond" / "Hover (or Click) where you've
       // seen this shape" guidance text. Meant to be true during a tutorial
@@ -75,8 +79,11 @@ var jsPsychCircularMemoryGrid = (function (jspsych) {
       const stimuli = trial.stimuli;
       const cueStim = stimuli[trial.cue_id];
 
+      const posDiameter = trial.position_diameter;
+      const posRadius = posDiameter / 2;
+      const cueDiameter = posDiameter + 10;
+      const cueRadius = cueDiameter / 2;
       const maxDist = Math.max(...trial.positions.map((p) => Math.hypot(p.x, p.y)));
-      const posRadius = 30;
       const margin = 20;
       const containerRadius = maxDist + posRadius + margin;
       const size = containerRadius * 2;
@@ -85,9 +92,9 @@ var jsPsychCircularMemoryGrid = (function (jspsych) {
 
       let html = `<div class="cmg-cue-label">${trial.show_hints ? "Hold your mouse over the cross" : ""}</div>`;
       html += `<div class="cmg-container" style="width:${size}px; height:${size}px;">`;
-      html += `<div class="cmg-cue cmg-cue-hidden" style="left:${centerX - 35}px; top:${centerY - 35}px;">+</div>`;
+      html += `<div class="cmg-cue cmg-cue-hidden" style="width:${cueDiameter}px; height:${cueDiameter}px; left:${centerX - cueRadius}px; top:${centerY - cueRadius}px;">+</div>`;
       trial.positions.forEach((p) => {
-        html += `<div class="cmg-position cmg-facedown cmg-locked cmg-dimmed" data-pos="${p.index}" style="left:${centerX + p.x - posRadius}px; top:${centerY + p.y - posRadius}px;"></div>`;
+        html += `<div class="cmg-position cmg-facedown cmg-locked cmg-dimmed" data-pos="${p.index}" style="width:${posDiameter}px; height:${posDiameter}px; left:${centerX + p.x - posRadius}px; top:${centerY + p.y - posRadius}px;"></div>`;
       });
       html += `</div>`;
       display_element.innerHTML = html;

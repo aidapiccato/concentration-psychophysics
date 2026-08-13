@@ -1,10 +1,10 @@
-// Automatically determines how many concentric rings n positions need so
-// that adjacent items are spaced roughly opts.itemSpacing px apart (capped
-// at opts.maxRings — scaling all ring radii up uniformly instead, if that
-// cap would otherwise leave items too close together), then splits the n
-// positions as evenly as possible across those rings via a
-// largest-remainder apportionment — this guarantees the counts sum to
-// exactly n while keeping every ring's angular step (nearly) identical.
+// Automatically determines how many concentric rings n positions need
+// (capped at opts.maxRings and opts.minRingSize), splits the n positions
+// as evenly as possible across those rings via a largest-remainder
+// apportionment — this guarantees the counts sum to exactly n while
+// keeping every ring's angular step (nearly) identical — then sizes each
+// ring's own radius from its own item count so every ring independently
+// keeps its items roughly opts.itemSpacing px apart.
 //
 // Coordinates are relative to a center point at (0, 0) — the caller (the
 // plugin, which knows the actual render container size) translates these
@@ -66,28 +66,28 @@ function computeLayout(n, opts) {
     maxRings,
     Math.max(1, Math.floor(n / minRingSize))
   );
-  const unscaledRadii = [];
-  for (let r = 0; r < numRings; r++) {
-    unscaledRadii.push(baseRadius + r * ringSpacing);
-  }
 
   // Equal weights split n as evenly as possible across the rings, rather
   // than proportional to radius — see the anti-alignment note above.
-  const counts = allocateRingCounts(n, unscaledRadii.map(() => 1));
+  const counts = allocateRingCounts(
+    n,
+    Array.from({ length: numRings }, () => 1)
+  );
 
-  // Since counts are now independent of each ring's unscaled radius, the
-  // innermost ring (smallest unscaled radius, but no fewer items than any
-  // other ring) is typically the tightest fit. Scale every ring's radius
-  // up uniformly (preserving their relative proportions) until whichever
-  // ring is actually most cramped — its assigned count needs more
-  // circumference than its unscaled radius provides — keeps items roughly
-  // itemSpacing apart. A no-op (scale 1) when nothing is cramped.
-  let scale = 1;
+  // Each ring's own radius is sized independently from its own item count,
+  // so every ring hits ~itemSpacing between its items — not just whichever
+  // ring happens to need the most room, with the rest left however loose a
+  // single shared scale factor left them (which could leave some rings far
+  // more spread out than itemSpacing actually called for). baseRadius is
+  // still a floor under ring 0, and consecutive rings are never closer
+  // than ringSpacing, to keep rings themselves visually distinct even when
+  // their item-count-driven radii would otherwise sit close together.
+  const radii = [];
   for (let r = 0; r < numRings; r++) {
-    const requiredRadius = (counts[r] * itemSpacing) / (2 * Math.PI);
-    scale = Math.max(scale, requiredRadius / unscaledRadii[r]);
+    const idealRadius = (counts[r] * itemSpacing) / (2 * Math.PI);
+    const minRadius = r === 0 ? baseRadius : radii[r - 1] + ringSpacing;
+    radii.push(Math.max(idealRadius, minRadius));
   }
-  const radii = unscaledRadii.map((r) => r * scale);
 
   const positions = [];
   let idx = 0;

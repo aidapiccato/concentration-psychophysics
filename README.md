@@ -245,7 +245,7 @@ No code changes needed to try different settings:
 | `maxAttemptsMultiplier` | 10 | A block (or the tutorial) that hasn't passed after `multiplier * size` trials is left behind (not revisited) and the session moves on |
 | `maxTotalTrials` | 2000 | Safety valve: force-ends the session after this many trials total even if blocks remain unfinished |
 | `circleSize` | 60 | Diameter (px) of the peripheral position circles; the central cue/cross is always drawn 10px larger |
-| `spacing` | `circleSize + 40` | Target distance (px) between adjacent positions, used to work out how many rings a block's layout needs. Defaults to a fixed margin around `circleSize` so circles never overlap without hand-tuning both together; pass an explicit value to override |
+| `spacing` | `circleSize * 1.75` | Target distance (px) between adjacent positions' centers, used to size each ring so its items end up this far apart. Defaults to `circleSize` plus a gap of `0.75 * circleSize` between edges, so the gap scales with circle size instead of needing to be hand-tuned alongside it; pass an explicit value to override |
 | `maxRings` | 2 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |
 | `minRingSize` | 6 | A ring is only added if every ring (including the new one) would still end up with at least this many items once the block splits evenly across them — e.g. a 6-image block always stays on a single ring rather than spreading 3 and 3 across two |
 | `ringSpacing` | `circleSize * 0.75` | Radial gap (px) between consecutive rings. Can safely be a bit less than a full circle diameter since the ring stagger already keeps neighboring rings' circles clear of each other |
@@ -259,20 +259,26 @@ No code changes needed to try different settings:
 The number of rings *within* a block is computed automatically
 (`computeNumRings` in [js/layout.js](js/layout.js)) from that block's size
 and `spacing`, recomputed per block since block size varies — but capped
-at `maxRings`. Fewer rings means less chance of a participant's cursor
-crossing (and, in `response=fixation` mode, briefly dwelling on) an
-unintended position on an inner ring while travelling out to a position on
-an outer one. The block's positions are then split as evenly as possible
-across those rings (6 and 6 for a 12-image block on 2 rings, not
-proportional to each ring's radius) so every ring has the same angular
-step — combined with the alternating half-step stagger between rings, this
-means an outer ring's positions always fall exactly *between* an inner
-ring's rather than lining up radially with any of them, which is what
-actually keeps a straight path from the center to an outer position from
-crossing directly over an inner one. The tradeoff is that once a block's
-size can't fit within `maxRings` rings at the target `spacing`, every
-ring's radius scales up together instead, so items end up closer together
-than `spacing` as block size grows.
+at `maxRings` and `minRingSize`. Fewer rings means less chance of a
+participant's cursor crossing (and, in `response=fixation` mode, briefly
+dwelling on) an unintended position on an inner ring while travelling out
+to a position on an outer one. The block's positions are then split as
+evenly as possible across those rings (6 and 6 for a 12-image block on 2
+rings, not proportional to each ring's radius) so every ring has the same
+angular step — combined with the alternating half-step stagger between
+rings, this means an outer ring's positions always fall exactly *between*
+an inner ring's rather than lining up radially with any of them, which is
+what actually keeps a straight path from the center to an outer position
+from crossing directly over an inner one.
+
+Each ring's radius is then sized independently from its own item count so
+that ring's items land ~`spacing` apart, regardless of how the other rings
+turned out — no ring ends up more spread out than `spacing` calls for just
+because a different ring needed more room. `baseRadius` (100px, not
+currently exposed as a param) is a floor under the innermost ring, and
+`ringSpacing` is a floor under the gap between consecutive rings, so rings
+stay visually distinct even when their item counts alone wouldn't require
+much separation.
 
 Example: `http://localhost:8765?blockSizes=6,12&criterion=0.75&feedback=600`
 (only 6- or 12-image blocks, a slightly more lenient 75% pass threshold)

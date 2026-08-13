@@ -5,10 +5,11 @@ const EXPERIMENT_CONFIG = (function () {
 
   // Diameter (px) of the peripheral position circles.
   const positionDiameter = parseInt(params.get("circleSize"), 10) || 100;
-  // Target distance (px) between adjacent positions. Defaults to a fixed
-  // margin around circleSize so circles never overlap without needing to
-  // hand-tune spacing alongside it; pass ?spacing=... to override outright.
-  const itemSpacing = parseInt(params.get("spacing"), 10) || positionDiameter + 40;
+  // Target distance (px) between adjacent positions' centers. Defaults to
+  // circleSize plus a gap of 0.75x circleSize between edges, so it scales
+  // with circle size instead of needing to be hand-tuned alongside it;
+  // pass ?spacing=... to override outright.
+  const itemSpacing = parseInt(params.get("spacing"), 10) || positionDiameter * 1.75;
   // Radial gap (px) between consecutive rings. Defaults to a bit less than
   // a full circle diameter — the alternating stagger between rings already
   // keeps a ring's circles clear of its neighbor's, so they can sit closer
@@ -30,11 +31,11 @@ const EXPERIMENT_CONFIG = (function () {
     positionDiameter: positionDiameter,
     ringSpacing: ringSpacing,
     // Caps how many concentric rings a block's layout can use — rings
-    // beyond this cap are never created; instead all rings' radii scale up
-    // together to keep items roughly itemSpacing apart. Keeping this low
-    // limits how many unintended positions a participant's cursor might
-    // cross (and briefly dwell on, in fixation response mode) while
-    // travelling from the center to an outer ring.
+    // beyond this cap are never created; instead the rings that do exist
+    // absorb more items each, which their radii grow to accommodate.
+    // Keeping this low limits how many unintended positions a
+    // participant's cursor might cross (and briefly dwell on, in fixation
+    // response mode) while travelling from the center to an outer ring.
     maxRings: parseInt(params.get("maxRings"), 10) || 2,
     // A ring is only added if every ring (including the new one) still
     // ends up with at least this many items, once n is split evenly across

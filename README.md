@@ -310,17 +310,17 @@ No code changes needed to try different settings:
 | `criterion` | 0.8 | Average per-image rolling accuracy required to pass a block |
 | `rollingWindow` | 10 | Number of most recent presentations of an image (within its block) that its rolling accuracy is computed over |
 | `maxAttemptsMultiplier` | 10 | A block (or the tutorial) that hasn't passed after `multiplier * size` trials is left behind (not revisited) and the session moves on |
-| `timeLimit` | 50 | Hard time limit in minutes for the main session, timed from its first trial. Once it has passed, the session ends right after the current trial — even mid-block — and goes to the debrief. `0` disables it |
+| `timeLimit` | 30 | Hard time limit in minutes for the main session, timed from its first trial. Once it has passed, the session ends right after the current trial — even mid-block — and goes to the debrief. `0` disables it |
 | `maxTotalTrials` | 2000 | Safety valve: force-ends the session after this many trials total even if blocks remain unfinished |
 | `breakDuration` | 120000 | Max time (ms) a break screen shows between blocks before auto-continuing; pressing any key continues sooner. `0` disables breaks |
 | `catchProb` | 0.05 | Probability any given main-session trial is a catch trial (simple-RT probe, no memory component) instead of a normal memory trial. `0` disables catch trials |
 | `circleSize` | 60 | Diameter (px) of the peripheral position circles; the central cue/cross is always drawn 10px larger |
 | `spacing` | `circleSize * 1.75` | Target distance (px) between adjacent positions' centers, used to size each ring so its items end up this far apart. Defaults to `circleSize` plus a gap of `0.75 * circleSize` between edges, so the gap scales with circle size instead of needing to be hand-tuned alongside it; pass an explicit value to override |
-| `maxRings` | 3 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |
+| `maxRings` | 4 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |
 | `minRingSize` | 6 | A ring is only added if every ring (including the new one) would still end up with at least this many items once the block splits evenly across them — e.g. a 6-image block always stays on a single ring rather than spreading 3 and 3 across two |
 | `ringSpacing` | `circleSize * 0.75` | Radial gap (px) between consecutive rings. Can safely be a bit less than a full circle diameter since the ring stagger already keeps neighboring rings' circles clear of each other |
-| `imageBase` | Cloudflare R2 URL | Folder or URL (no trailing slash) holding `manifest.json` and the stimulus images. Defaults to the resized (256px) set on Cloudflare R2; pass `?imageBase=assets/images` to use the full-size local copy. A cross-origin host must allow CORS for `manifest.json` (it's loaded with `fetch`) |
-| `windowCheck` | on | Before the task starts, requires a window big enough to draw the biggest block's grid at `minScale` or larger (about 552 × 582 px by default), and a mouse/trackpad device; re-checked if the window is later shrunk. Pass `?windowCheck=off` to skip it |
+| `imageBase` | `https://concentration-psychophysics.site` | Folder or URL (no trailing slash) holding `manifest.json` and the stimulus images. Defaults to the resized (256px) set on Cloudflare R2, at `https://concentration-psychophysics.site`; pass `?imageBase=assets/images` to use the full-size local copy. A cross-origin host must allow CORS for `manifest.json` (it's loaded with `fetch`) |
+| `windowCheck` | on | Before the task starts, requires a window big enough to draw the biggest block's grid at `minScale` or larger (about 575 × 605 px by default), and a mouse/trackpad device; re-checked if the window is later shrunk. Pass `?windowCheck=off` to skip it |
 | `minScale` | 0.6 | Smallest factor a block's grid (circles and all distances) may be shrunk by to fit the window. Blocks that fit are drawn at full size; a window that would need a smaller factor is asked to be enlarged instead |
 | `feedback` | 500 | Fixed feedback duration (ms) after a response, before the trial ends |
 | `iti` | 500 | Inter-trial interval in ms. Shows the same dashed fixation cross as cross-fixation (rather than a blank page), so the transition into the next trial doesn't flash to empty and back |
@@ -340,9 +340,11 @@ evenly as possible across those rings (6 and 6 for a 12-image block on 2
 rings, not proportional to each ring's radius) so every ring has the same
 angular step — combined with the alternating half-step stagger between
 rings, this means an odd ring's positions always fall exactly *between*
-its neighbors' rather than lining up radially with any of them. With 3
-rings, ring 2 lines up with ring 0 again, so a straight path to it can
-cross an inner-ring circle; that's accepted.
+its neighbors' rather than lining up radially with any of them. With 3 or
+more rings, ring 2 lines up with ring 0 again (and ring 3 with ring 1), so
+a straight path to it can cross an inner-ring circle; that's accepted. With
+the defaults, 12 images sit on 2 rings of 6, 18 on 3 rings of 6, and 24 on
+4 rings of 6.
 
 Each ring's radius is then sized independently from its own item count so
 that ring's items land ~`spacing` apart, regardless of how the other rings
@@ -352,12 +354,15 @@ between consecutive rings, so rings stay visually distinct even when their
 item counts alone wouldn't require much separation.
 
 **Fit to window.** A bigger block needs more rings and so more room (a
-24-image grid is about 886px across at the default circle size). Each
-block's layout is computed for the window at the moment the block starts:
-if the grid wouldn't fit without scrolling, the circles and every distance
+24-image grid is about 924px across at the default circle size). The scale
+is worked out once per session, for the biggest block size: if that grid
+wouldn't fit the window without scrolling, the circles and every distance
 between them are scaled down together by whatever factor makes it fit (never
-below `minScale`, and never above full size). Each trial records the result
-as `circle_diameter` and `layout_scale`, and the window size as
+below `minScale`, and never above full size), and every block uses that same
+scale. Rings are always 6 circles at fixed radii, so a smaller block's
+positions are exactly the inner rings of a bigger one's (12 ⊂ 18 ⊂ 24), and
+locations are the same across grid sizes. Each trial records the scale as
+`circle_diameter` and `layout_scale`, and the window size as
 `window_width`/`window_height`, so any effect of the scale on movement
 times can be checked afterwards.
 
@@ -436,8 +441,9 @@ provides jsPsych itself.
 3. Stimuli are not uploaded to cognition.run: they load from the Cloudflare
    R2 bucket set as the default `imageBase` in [js/config.js](js/config.js)
    (the resized 256px set from `scripts/resize_stimuli.py`, with a CORS
-   policy allowing GET). Use a custom domain on the bucket for real
-   collection — `r2.dev` addresses are rate-limited and meant for testing.
+   policy allowing GET), served from the bucket's custom domain
+   `https://concentration-psychophysics.site`. The bucket's `r2.dev`
+   address is turned off.
 4. Local file saving (the `data/` folder and `localStorage` backup) only
    runs on `localhost`; when hosted, cognition.run captures the data itself
    and re-uploads anything that failed to send.

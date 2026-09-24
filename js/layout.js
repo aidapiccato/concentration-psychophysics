@@ -13,8 +13,9 @@
 // Every other ring (odd ring index) is rotated by half its own angular
 // step. With equal angular steps across rings, this puts every position
 // on an odd ring exactly between two positions of the rings next to it
-// rather than radially aligned with any of them. (With 3 rings, ring 2
-// lines up with ring 0 again — accepted.)
+// rather than radially aligned with any of them. (With 3 or more rings,
+// ring 2 lines up with ring 0 again, ring 3 with ring 1, and so on —
+// accepted.)
 
 function allocateRingCounts(n, weights) {
   const totalWeight = weights.reduce((a, b) => a + b, 0);

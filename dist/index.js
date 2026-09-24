@@ -46,17 +46,17 @@ const EXPERIMENT_CONFIG = (function () {
     // Keeping this low limits how many unintended positions a
     // participant's cursor might cross (and briefly dwell on, in fixation
     // response mode) while travelling from the center to an outer ring.
-    maxRings: parseInt(params.get("maxRings"), 10) || 3,
+    maxRings: parseInt(params.get("maxRings"), 10) || 4,
     // A ring is only added if every ring (including the new one) still
     // ends up with at least this many items, once n is split evenly across
     // them — keeps small blocks from being spread thin across rings.
     minRingSize: parseInt(params.get("minRingSize"), 10) || 6,
     // Folder or URL holding manifest.json and the stimulus images, without a
     // trailing slash. Defaults to the resized (256px) set hosted on Cloudflare
-    // R2; pass ?imageBase=assets/images to use the full-size local copy
+    // R2 (custom domain concentration-psychophysics.site); pass ?imageBase=assets/images to use the full-size local copy
     // instead (e.g. when offline).
     imageBaseUrl: (
-      params.get("imageBase") || "https://pub-8e8254f2c58c45018807f42031999526.r2.dev"
+      params.get("imageBase") || "https://concentration-psychophysics.site"
     ).replace(/\/+$/, ""),
     // Prolific completion code (the `cc=` value from your study's completion
     // URL). While this is empty, finishing the task does nothing special;
@@ -113,7 +113,7 @@ const EXPERIMENT_CONFIG = (function () {
     // trial: once it has passed, the session ends right after the current
     // trial, even in the middle of a block, and goes to the debrief. Pass
     // ?timeLimit=0 to disable it.
-    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 1) * 60 * 1000,
+    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 30) * 60 * 1000,
     // Safety valve: force-ends the session after this many trials total
     // even if blocks remain unfinished, so a subject can't get stuck
     // indefinitely.
@@ -214,8 +214,9 @@ function generateBlocks(manifest, sizes) {
 // Every other ring (odd ring index) is rotated by half its own angular
 // step. With equal angular steps across rings, this puts every position
 // on an odd ring exactly between two positions of the rings next to it
-// rather than radially aligned with any of them. (With 3 rings, ring 2
-// lines up with ring 0 again — accepted.)
+// rather than radially aligned with any of them. (With 3 or more rings,
+// ring 2 lines up with ring 0 again, ring 3 with ring 1, and so on —
+// accepted.)
 
 function allocateRingCounts(n, weights) {
   const totalWeight = weights.reduce((a, b) => a + b, 0);
@@ -704,11 +705,21 @@ function fitScale(gridSize) {
   );
 }
 
-// Lays out a block for the current window: full size if it fits, otherwise
-// shrunk (see fitScale). Returns the positions plus the circle diameter and
-// scale actually used, which the plugin and ITI screen need to draw it.
+// The scale every block in the session is drawn at, fixed the first time a
+// block is laid out. It's based on the biggest block, so all block sizes use
+// the same scale (and thus the same physical positions: a smaller block's
+// positions are the inner rings of a bigger one's).
+let sessionLayoutScale = null;
+
+// Lays out a block for this session's scale: full size if the biggest block
+// fits the window, otherwise shrunk (see fitScale). Returns the positions
+// plus the circle diameter and scale actually used, which the plugin and ITI
+// screen need to draw it.
 function computeBlockLayout(cfg, n) {
-  const scale = fitScale(gridSizeAt(cfg, n, 1));
+  if (sessionLayoutScale === null) {
+    sessionLayoutScale = fitScale(biggestGridSize(cfg));
+  }
+  const scale = sessionLayoutScale;
   return {
     layout: computeLayout(n, layoutOptionsFor(cfg, scale)),
     positionDiameter: cfg.positionDiameter * scale,

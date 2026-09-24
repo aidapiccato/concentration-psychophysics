@@ -52,11 +52,21 @@ function fitScale(gridSize) {
   );
 }
 
-// Lays out a block for the current window: full size if it fits, otherwise
-// shrunk (see fitScale). Returns the positions plus the circle diameter and
-// scale actually used, which the plugin and ITI screen need to draw it.
+// The scale every block in the session is drawn at, fixed the first time a
+// block is laid out. It's based on the biggest block, so all block sizes use
+// the same scale (and thus the same physical positions: a smaller block's
+// positions are the inner rings of a bigger one's).
+let sessionLayoutScale = null;
+
+// Lays out a block for this session's scale: full size if the biggest block
+// fits the window, otherwise shrunk (see fitScale). Returns the positions
+// plus the circle diameter and scale actually used, which the plugin and ITI
+// screen need to draw it.
 function computeBlockLayout(cfg, n) {
-  const scale = fitScale(gridSizeAt(cfg, n, 1));
+  if (sessionLayoutScale === null) {
+    sessionLayoutScale = fitScale(biggestGridSize(cfg));
+  }
+  const scale = sessionLayoutScale;
   return {
     layout: computeLayout(n, layoutOptionsFor(cfg, scale)),
     positionDiameter: cfg.positionDiameter * scale,

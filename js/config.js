@@ -48,6 +48,12 @@ const EXPERIMENT_CONFIG = (function () {
     imageBaseUrl: (
       params.get("imageBase") || "https://pub-8e8254f2c58c45018807f42031999526.r2.dev"
     ).replace(/\/+$/, ""),
+    // Prolific completion code (the `cc=` value from your study's completion
+    // URL). While this is empty, finishing the task does nothing special;
+    // once it's filled in, participants are redirected to Prolific at the
+    // end of the session (only when hosted -- never on localhost). Paste the
+    // code here, or pass ?completionCode=... on the study URL.
+    prolificCompletionCode: params.get("completionCode") || "", // TODO: paste code here
     feedbackDuration: parseInt(params.get("feedback"), 10) || 500,
     interTrialInterval: parseInt(params.get("iti"), 10) || 500,
     fixationDuration: parseInt(params.get("fixation"), 10) || 200,

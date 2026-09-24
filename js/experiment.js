@@ -1,10 +1,27 @@
+// The task renders into #jspsych-target. index.html provides it; a host that
+// runs this script inside its own page (e.g. cognition.run) may not, so
+// create it if it's missing.
+function ensureDisplayElement() {
+  let target = document.getElementById("jspsych-target");
+  if (!target) {
+    target = document.createElement("div");
+    target.id = "jspsych-target";
+    document.body.appendChild(target);
+  }
+  return target;
+}
+
 function showStartupError(message) {
-  document.getElementById("jspsych-target").innerHTML =
+  ensureDisplayElement().innerHTML =
     `<p style="color:#c0392b; max-width:500px; text-align:center;">${message}</p>`;
 }
 
-document.addEventListener("DOMContentLoaded", async function () {
+// Starts immediately if the page has already finished loading (a host may
+// inject this script after DOMContentLoaded has fired, in which case a plain
+// listener would never run).
+async function startTask() {
   try {
+    ensureDisplayElement();
     await runExperiment();
   } catch (err) {
     // Anything that goes wrong during setup (missing manifest, a CDN
@@ -14,7 +31,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     showStartupError(`Something went wrong starting the task: ${err.message}`);
     throw err;
   }
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startTask);
+} else {
+  startTask();
+}
 
 // Saving data to disk automatically only makes sense when testing locally
 // — on cognition.run this would trigger unexpected file writes/downloads
@@ -62,6 +85,15 @@ async function chooseDataDirectory() {
 async function runExperiment() {
   const cfg = EXPERIMENT_CONFIG;
 
+  // Sends the participant back to Prolific once the session is complete.
+  // Does nothing until cfg.prolificCompletionCode is filled in.
+  function redirectToProlific() {
+    if (!cfg.prolificCompletionCode) return;
+    window.location.href = `https://app.prolific.com/submissions/complete?cc=${encodeURIComponent(
+      cfg.prolificCompletionCode
+    )}`;
+  }
+
   const dataDirHandle = isLocalDev ? await chooseDataDirectory() : null;
   const sessionFilename = `session_${Date.now()}.csv`;
 
@@ -91,7 +123,13 @@ async function runExperiment() {
       }
     },
     on_finish: function () {
-      if (!isLocalDev) return;
+      // On cognition.run, this global on_finish only runs after the
+      // platform has finished uploading every trial, so redirecting from
+      // here (and only here) can't lose data.
+      if (!isLocalDev) {
+        redirectToProlific();
+        return;
+      }
       const csv = jsPsych.data.get().ignore(IGNORED_DATA_COLUMNS).csv();
       if (dataDirHandle) {
         writeSessionFile(csv);

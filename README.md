@@ -409,30 +409,34 @@ psychophysics/bin/pip install -e /path/to/figure-style
 
 ## Moving to cognition.run
 
-1. Create a free account at cognition.run and start a new experiment —
-   their demo experiments are a good sanity check for how they expect files
-   structured (plain static jsPsych, same as this project).
-2. Upload/sync this folder's contents (`index.html`, `css/`, `js/`,
-   `assets/`) as the experiment source. No build step is needed since
-   everything already runs from static files + CDN scripts. Note
-   `assets/images/` is the full stimulus pool (e.g. ~1.18GB for all 1,854
-   THINGSplus CC0 images) even though each participant's browser only ever
-   downloads whichever block's images are currently active, preloaded fresh
-   per block via jsPsych's preload step — check cognition.run's upload size
-   limits before pushing the whole pool.
-3. cognition.run automatically captures jsPsych's `DataCollection` output
-   per participant — you don't need to wire up your own data-saving
-   endpoint.
-4. Before going live, add a Prolific completion step: on the debrief screen,
-   redirect to your Prolific completion URL (`https://app.prolific.com/submissions/complete?cc=<COMPLETION_CODE>`)
-   so participants return automatically. This isn't wired up yet — it's a
-   small addition to the `debrief` trial's `on_finish` in
-   [js/experiment.js](js/experiment.js) once you have a completion code from
-   your Prolific study.
-5. Cognition.run gives you a public experiment link — paste that into your
-   Prolific study's "Study URL" field. No other Prolific-side integration is
-   needed; Prolific just needs to know where to send participants and what
-   completion code to expect back.
+cognition.run takes one main JavaScript source, not a folder of scripts, and
+provides jsPsych itself.
+
+1. Run `python3 scripts/build_cognition.py`. It bundles `css/style.css` and
+   the `js/` files (in `index.html`'s order) into `dist/index.js`.
+2. Paste `dist/index.js` into the code editor of your cognition.run task
+   (or deploy it through their GitHub integration, which expects the main
+   source as `index.js`). Check the editor's preview console for errors —
+   in particular that the `instructions` and `preload` jsPsych plugins are
+   available there, and that our custom plugin's use of `jsPsychModule`
+   resolves.
+3. Stimuli are not uploaded to cognition.run: they load from the Cloudflare
+   R2 bucket set as the default `imageBase` in [js/config.js](js/config.js)
+   (the resized 256px set from `scripts/resize_stimuli.py`, with a CORS
+   policy allowing GET). Use a custom domain on the bucket for real
+   collection — `r2.dev` addresses are rate-limited and meant for testing.
+4. Local file saving (the `data/` folder and `localStorage` backup) only
+   runs on `localhost`; when hosted, cognition.run captures the data itself
+   and re-uploads anything that failed to send.
+5. Consent is set up in the cognition.run task settings (markdown, logged
+   acceptance, fallback URL on rejection) rather than in this code.
+6. For Prolific, set the study URL to
+   `https://<task>.cognition.run?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}`
+   — cognition.run saves every URL parameter as a data column. The
+   completion redirect is in place but inactive: paste your completion code
+   into `prolificCompletionCode` in [js/config.js](js/config.js) (placeholder
+   marked `TODO`), then rebuild. It redirects from the global `on_finish`,
+   which cognition.run only calls after all data has uploaded.
 
 ## Known rough edges / next steps
 

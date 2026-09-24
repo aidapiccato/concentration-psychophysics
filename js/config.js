@@ -53,7 +53,7 @@ const EXPERIMENT_CONFIG = (function () {
     // once it's filled in, participants are redirected to Prolific at the
     // end of the session (only when hosted -- never on localhost). Paste the
     // code here, or pass ?completionCode=... on the study URL.
-    prolificCompletionCode: params.get("completionCode") || "", // TODO: paste code here
+    prolificCompletionCode: params.get("completionCode") || "CJUPQSZ5", 
     feedbackDuration: parseInt(params.get("feedback"), 10) || 500,
     interTrialInterval: parseInt(params.get("iti"), 10) || 500,
     fixationDuration: parseInt(params.get("fixation"), 10) || 200,

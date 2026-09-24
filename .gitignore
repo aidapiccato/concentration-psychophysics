@@ -2,3 +2,6 @@ psychophysics/
 things_download/
 .DS_Store
 .claude/
+data/
+.ipynb_checkpoints/
+notebooks/

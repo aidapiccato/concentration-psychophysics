@@ -2,20 +2,19 @@
 // (capped at opts.maxRings and opts.minRingSize), splits the n positions
 // as evenly as possible across those rings via a largest-remainder
 // apportionment — this guarantees the counts sum to exactly n while
-// keeping every ring's angular step (nearly) identical — then sizes each
-// ring's own radius from its own item count so every ring independently
-// keeps its items roughly opts.itemSpacing px apart.
+// keeping every ring's angular step (nearly) identical — then places the
+// rings ringSpacing apart, starting from a radius where the innermost
+// ring's items are roughly opts.itemSpacing px apart.
 //
 // Coordinates are relative to a center point at (0, 0) — the caller (the
 // plugin, which knows the actual render container size) translates these
 // into pixel positions.
 //
 // Every other ring (odd ring index) is rotated by half its own angular
-// step. With equal angular steps across rings, this puts every outer-ring
-// position exactly between two inner-ring ones rather than radially
-// aligned with any of them — so a cursor travelling from the center
-// straight out to an outer position never passes directly over an inner
-// one.
+// step. With equal angular steps across rings, this puts every position
+// on an odd ring exactly between two positions of the rings next to it
+// rather than radially aligned with any of them. (With 3 rings, ring 2
+// lines up with ring 0 again — accepted.)
 
 function allocateRingCounts(n, weights) {
   const totalWeight = weights.reduce((a, b) => a + b, 0);
@@ -75,12 +74,9 @@ function computeLayout(n, opts) {
   );
 
   // Each ring's own radius is sized independently from its own item count,
-  // so every ring hits ~itemSpacing between its items — not just whichever
-  // ring happens to need the most room, with the rest left however loose a
-  // single shared scale factor left them (which could leave some rings far
-  // more spread out than itemSpacing actually called for). baseRadius is
-  // still a floor under ring 0, and consecutive rings are never closer
-  // than ringSpacing, to keep rings themselves visually distinct even when
+  // so every ring hits ~itemSpacing between its items. baseRadius is still
+  // a floor under ring 0, and consecutive rings are never closer than
+  // ringSpacing, to keep rings themselves visually distinct even when
   // their item-count-driven radii would otherwise sit close together.
   const radii = [];
   for (let r = 0; r < numRings; r++) {
@@ -109,4 +105,27 @@ function computeLayout(n, opts) {
     }
   }
   return positions;
+}
+
+// Derives the render container's size and the center cue's placement
+// within it from a block's layout — shared by the plugin (rendering a
+// trial) and experiment.js (rendering the ITI's fixation cross) so both
+// land the cross at exactly the same spot; computing this independently
+// in two places risks them drifting apart, which shows up as the cross
+// visibly shifting between a trial and the ITI right after it.
+function computeContainerGeometry(positions, positionDiameter) {
+  const posRadius = positionDiameter / 2;
+  const cueDiameter = positionDiameter + 10;
+  const cueRadius = cueDiameter / 2;
+  const margin = 20;
+  const maxDist = Math.max(...positions.map((p) => Math.hypot(p.x, p.y)));
+  const containerRadius = maxDist + posRadius + margin;
+  return {
+    size: containerRadius * 2,
+    centerX: containerRadius,
+    centerY: containerRadius,
+    posRadius: posRadius,
+    cueDiameter: cueDiameter,
+    cueRadius: cueRadius,
+  };
 }

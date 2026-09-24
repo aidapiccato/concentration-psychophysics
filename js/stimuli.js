@@ -2,10 +2,11 @@
 // {concept, file} entries produced by scripts/prepare_things_stimuli.py
 // after downloading images from the THINGS dataset (see README).
 async function loadStimulusManifest() {
-  const response = await fetch("assets/images/manifest.json");
+  const manifestUrl = `${EXPERIMENT_CONFIG.imageBaseUrl}/manifest.json`;
+  const response = await fetch(manifestUrl);
   if (!response.ok) {
     throw new Error(
-      "Could not load assets/images/manifest.json. Have you run " +
+      `Could not load ${manifestUrl}. Have you run ` +
         "scripts/prepare_things_stimuli.py yet? See the README's " +
         "'Real stimuli' section."
     );
@@ -31,7 +32,7 @@ function shuffleArray(arr) {
 function stimuliFromManifestEntries(entries) {
   return entries.map((entry, i) => ({
     id: i,
-    imageUrl: `assets/images/${entry.file}`,
+    imageUrl: `${EXPERIMENT_CONFIG.imageBaseUrl}/${entry.file}`,
     label: entry.concept,
   }));
 }

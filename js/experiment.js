@@ -16,16 +16,107 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 });
 
+// Saving data to disk automatically only makes sense when testing locally
+// — on cognition.run this would trigger unexpected file writes/downloads
+// in every participant's browser, so all of it is gated on hostname.
+const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const supportsFileSystemAccess = "showDirectoryPicker" in window;
+const AUTOSAVE_KEY = "memory_task_autosave";
+// jsPsych's generic stimulus/response columns are only ever populated by
+// the plain html-keyboard-response trials (instructions, transitions,
+// breaks, ITI, debrief) — noise in a CSV meant for analyzing
+// circular_memory_grid rows, which use their own more specific fields.
+const IGNORED_DATA_COLUMNS = ["stimulus", "response"];
+
+// One-time prompt (Chrome/Edge only) to grant write access to the
+// project's data/ folder, so every trial can be written straight to disk
+// there without asking again. Returns null if unsupported, skipped, or
+// cancelled — callers fall back to the localStorage + browser-download
+// path in that case.
+async function chooseDataDirectory() {
+  if (!supportsFileSystemAccess) return null;
+  return new Promise((resolve) => {
+    const target = document.getElementById("jspsych-target");
+    target.innerHTML =
+      '<div style="text-align:center; max-width:500px;">' +
+      "<p>Local dev: choose this project's root folder (human_psychophysics) " +
+      "to save trial-by-trial data straight into its data/ folder.</p>" +
+      '<button id="choose-data-dir">Choose folder</button>' +
+      '<p><a id="skip-data-dir" href="#">Skip (browser download at the end instead)</a></p>' +
+      "</div>";
+    document.getElementById("choose-data-dir").addEventListener("click", async () => {
+      try {
+        const rootHandle = await window.showDirectoryPicker();
+        resolve(await rootHandle.getDirectoryHandle("data", { create: true }));
+      } catch (err) {
+        resolve(null); // cancelled, or permission denied
+      }
+    });
+    document.getElementById("skip-data-dir").addEventListener("click", (e) => {
+      e.preventDefault();
+      resolve(null);
+    });
+  });
+}
+
 async function runExperiment() {
   const cfg = EXPERIMENT_CONFIG;
 
+  const dataDirHandle = isLocalDev ? await chooseDataDirectory() : null;
+  const sessionFilename = `session_${Date.now()}.csv`;
+
+  // Overwrites the same on-disk file with the full dataset so far — not an
+  // append, so it's always a valid, complete CSV even if the session ends
+  // early.
+  async function writeSessionFile(csv) {
+    const fileHandle = await dataDirHandle.getFileHandle(sessionFilename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(csv);
+    await writable.close();
+  }
+
   const jsPsych = initJsPsych({
     display_element: "jspsych-target",
+    // Backs up all data collected so far after every trial — to data/ on
+    // disk when a folder was granted, otherwise to localStorage (a
+    // crash/refresh-proof safety net, not a downloaded file, recoverable
+    // from the browser console with window.recoverAutosave()).
+    on_trial_finish: function () {
+      if (!isLocalDev) return;
+      const csv = jsPsych.data.get().ignore(IGNORED_DATA_COLUMNS).csv();
+      if (dataDirHandle) {
+        writeSessionFile(csv);
+      } else {
+        localStorage.setItem(AUTOSAVE_KEY, csv);
+      }
+    },
     on_finish: function () {
-      // Local dev convenience: uncomment to auto-download a CSV when testing.
-      // jsPsych.data.get().localSave("csv", "memory_task_data.csv");
+      if (!isLocalDev) return;
+      const csv = jsPsych.data.get().ignore(IGNORED_DATA_COLUMNS).csv();
+      if (dataDirHandle) {
+        writeSessionFile(csv);
+      } else {
+        jsPsych.data.get().ignore(IGNORED_DATA_COLUMNS).localSave("csv", `memory_task_data_${Date.now()}.csv`);
+      }
+      localStorage.removeItem(AUTOSAVE_KEY);
     },
   });
+  if (isLocalDev) {
+    window.recoverAutosave = function () {
+      const csv = localStorage.getItem(AUTOSAVE_KEY);
+      if (!csv) {
+        console.log("No autosaved data found.");
+        return;
+      }
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `memory_task_autosave_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+  }
   // Exposed for local debugging/iteration only (e.g. jsPsych.data.get() in
   // the browser console). Harmless to leave in for cognition.run hosting.
   window.jsPsych = jsPsych;
@@ -223,7 +314,27 @@ async function runExperiment() {
 
   const iti = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: "",
+    // Keeps the same dashed fixation cross visible in exactly the same
+    // spot (rather than a blank page) so feedback -> ITI -> the next
+    // trial's cross-fixation stage reads as one continuous marker instead
+    // of a flash to empty and back. Reuses the plugin's own geometry
+    // (computeContainerGeometry) and markup structure — a container sized
+    // to activeBlock's layout, with an empty label above it — so nothing
+    // shifts between this and the real trial screens around it.
+    stimulus: function () {
+      const { size, centerX, centerY, cueDiameter, cueRadius } = computeContainerGeometry(
+        activeBlock.layout,
+        cfg.positionDiameter
+      );
+      return (
+        '<div class="cmg-cue-label"></div>' +
+        `<div class="cmg-container" style="width:${size}px; height:${size}px;">` +
+        `<div class="cmg-cue cmg-cue-hidden" style="width:${cueDiameter}px; height:${cueDiameter}px; left:${
+          centerX - cueRadius
+        }px; top:${centerY - cueRadius}px;">+</div>` +
+        "</div>"
+      );
+    },
     choices: "NO_KEYS",
     trial_duration: cfg.interTrialInterval,
   };
@@ -244,30 +355,59 @@ async function runExperiment() {
     response_deadline: cfg.responseDeadline,
     position_diameter: cfg.positionDiameter,
     on_start: function (trial) {
-      const localIdx = Math.floor(Math.random() * activeBlock.size);
-      trial.cue_id = localIdx;
-      trial.target_pos = activeBlock.positionStimMap.indexOf(localIdx);
       trial.positions = activeBlock.layout;
       trial.stimuli = activeBlock.stimuli;
       trial.position_stim_map = activeBlock.positionStimMap;
+      // Catch trials are a simple-RT probe, not a memory test — never
+      // during the tutorial, and no image/memory component involved, so
+      // any position can be the target.
+      const isCatchTrial = activeBlock.kind !== "tutorial" && Math.random() < cfg.catchTrialProbability;
+      trial.catch_trial = isCatchTrial;
       // On-screen guidance text ("Hold your mouse over the cross", "Look
       // away when you're ready to respond", "Hover/Click where you've
       // seen this shape") only shows during the tutorial — by the main
-      // session the participant has already learned the mechanics.
+      // session the participant has already learned the mechanics. Never
+      // shown on catch trials either way, since they're main-session-only.
       trial.show_hints = activeBlock.kind === "tutorial";
+
+      if (isCatchTrial) {
+        trial.cue_id = null;
+        trial.target_pos = activeBlock.layout[Math.floor(Math.random() * activeBlock.layout.length)].index;
+        trial.data = {
+          task: "circular_memory_grid",
+          catch_trial: true,
+          is_tutorial: false,
+          block_number: activeBlock.blockNumber,
+          block_size: activeBlock.size,
+          block_trial_number: activeBlock.trialCount + 1,
+          cue_image: null,
+        };
+        return;
+      }
+
+      const localIdx = Math.floor(Math.random() * activeBlock.size);
+      trial.cue_id = localIdx;
+      trial.target_pos = activeBlock.positionStimMap.indexOf(localIdx);
       trial.data = {
         task: "circular_memory_grid",
+        catch_trial: false,
         is_tutorial: activeBlock.kind === "tutorial",
         block_number: activeBlock.kind === "tutorial" ? 0 : activeBlock.blockNumber,
         block_size: activeBlock.size,
         block_trial_number: activeBlock.trialCount + 1,
-        image_concept: activeBlock.stimuli[localIdx].label,
+        cue_image: activeBlock.stimuli[localIdx].label,
       };
     },
     on_finish: function (data) {
       activeBlock.trialCount++;
       totalTrialsRun++;
-      recordOutcome(activeBlock, data.cue_id, data.correct);
+      // Catch trials aren't tied to a real cued image, so they're excluded
+      // from the rolling-accuracy tracking that decides when a block
+      // passes — including them would corrupt per-image accuracy with an
+      // artificially easy "trial" that isn't testing recall at all.
+      if (!data.catch_trial) {
+        recordOutcome(activeBlock, data.cue_id, data.correct);
+      }
     },
   };
 
@@ -290,6 +430,28 @@ async function runExperiment() {
     },
   };
 
+  const breakTrial = {
+    // Only shown from the 2nd main-session block onward — activeBlock is
+    // already pointing at the block about to run by the time this node's
+    // condition is checked (loop_function reassigns it before looping back
+    // to the top of sessionLoop's timeline).
+    timeline: [
+      {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus:
+          "<h2>Take a break</h2>" +
+          "<p>Rest for a moment if you'd like. The task will continue " +
+          "automatically in a couple of minutes, or press any key to " +
+          "continue sooner.</p>",
+        choices: "ALL_KEYS",
+        trial_duration: cfg.breakDuration,
+      },
+    ],
+    conditional_function: function () {
+      return cfg.breakDuration > 0 && activeBlock && activeBlock.kind !== "tutorial" && activeBlock.blockNumber > 1;
+    },
+  };
+
   const postTutorialScreen = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus:
@@ -306,7 +468,7 @@ async function runExperiment() {
   };
 
   const sessionLoop = {
-    timeline: [blockTransition, blockPreload, blockLoop],
+    timeline: [breakTrial, blockTransition, blockPreload, blockLoop],
     loop_function: function () {
       return advanceToNextBlock();
     },

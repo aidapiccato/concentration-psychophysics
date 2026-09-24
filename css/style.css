@@ -102,3 +102,17 @@ html, body {
 .cmg-position.cmg-incorrect:hover {
   transform: none;
 }
+
+.cmg-catch-highlight {
+  border: 3px solid #f1c40f;
+  animation: cmg-catch-pulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes cmg-catch-pulse {
+  from {
+    box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.6);
+  }
+  to {
+    box-shadow: 0 0 12px 6px rgba(241, 196, 15, 0.6);
+  }
+}

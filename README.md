@@ -5,8 +5,8 @@ positional memory task (6-position matching task in
 `memory-latent-variable`/`memory-strength-io`), built for online data
 collection via [cognition.run](https://www.cognition.run/) and Prolific.
 
-Adapted for humans: the number of positions per block varies (6, 12, or 18,
-not fixed at 6), positions are laid out on one or more concentric rings
+Adapted for humans: the number of positions per block varies (12, 18, or 24,
+not fixed), positions are laid out on one or more concentric rings
 instead of a fixed grid, and — like the original task — a session is a
 sequence of performance-gated blocks rather than one long fixed run.
 
@@ -48,8 +48,8 @@ usage guidance, so it always shows.
 The main session is a sequence of **blocks**, each a disjoint subset of the
 image pool (no image appears in more than one block across the whole
 session, and never one already used by the tutorial). Block size is
-randomly chosen per block from `blockSizes` (default `6, 12`; try
-`?blockSizes=6,12,18` for a three-way mix), with the constraint that
+randomly chosen per block from `blockSizes` (default `12, 18, 24`; try
+`?blockSizes=12,24` for a two-way mix), with the constraint that
 consecutive blocks never share a size — with exactly two sizes this means
 strict alternation; with one size the constraint is trivially impossible,
 so it's just reused every time. See [js/stimuli.js](js/stimuli.js)'s
@@ -77,6 +77,35 @@ valve for the case where blocks keep hitting their cap without passing. A
 brief message announces each transition ("Nice work! Starting a new set of
 shapes." / "Let's move on to a different set of shapes.").
 
+Between blocks (not before the first one, and not around the tutorial), a
+break screen shows for up to `breakDuration` ms (default 120000, i.e. 2
+minutes) — pressing any key continues immediately, otherwise the next
+block starts automatically once the time is up. Pass `?breakDuration=0` to
+disable breaks entirely.
+
+### Catch trials
+
+On each main-session trial (never the tutorial), with probability
+`catchTrialProbability` (default 0.05) it's a **catch trial** instead of a
+normal memory trial: once cross-fixation is satisfied, one peripheral
+position is directly highlighted (a pulsing yellow border) in place of a
+cue image, and the participant is already looking at the center — they
+just need to move to the highlighted position as fast as possible once
+they notice it, with no memory component at all, and selecting it shows
+only a correct/incorrect border, no item image (there's nothing meaningful
+to reveal). This mirrors the normal trial's mechanics closely enough that
+the same event timestamps decompose into two separate simple-RT measures:
+- `cue_offset - cue_onset` — how long they lingered at the center before
+  moving, now that they already know where to go
+- `choice_reveal - cue_offset` — how long the actual movement + selection
+  took
+
+Randomly interspersing these throughout the session helps separate "got
+slower because recall is hard" from "got slower because they're
+fatigued/inattentive." Catch trials are recorded with `catch_trial: true`
+and excluded from the rolling-accuracy tracking that decides when a block
+passes. Pass `?catchProb=0` to disable them.
+
 ### Trials
 
 Within a block, each trial cues one of that block's images (uniformly at
@@ -95,10 +124,11 @@ mouse-hover-driven (no eye tracking):
      cross are removed entirely for the rest of the trial (not just hidden
      — there's nothing left to hover back onto) and simultaneously the
      peripheral positions un-dim and unlock for selection. Selecting one
-     always reveals
-     whatever item is actually there (correct or not) as feedback, then the
-     trial ends — there's no separate study phase, so early trials are pure
-     guessing and accuracy should climb as the participant explores.
+     always reveals whatever item is actually there (correct or not) as
+     feedback — shown for a fixed `feedback` ms (default 500) regardless
+     of where the participant looks — then the trial ends. There's no separate study phase,
+     so early trials are pure guessing and accuracy should climb as the
+     participant explores.
 
      How a position gets selected depends on `response` (see param table):
      by default (`fixation`), selection requires hovering a position
@@ -112,20 +142,57 @@ mouse-hover-driven (no eye tracking):
      leaves the central fixation area. If it elapses with no selection made,
      the trial ends automatically with a null response (`timed_out: true`
      in the data). Pass `?deadline=0` to disable it.
-- Data recorded per trial: `cue_id`, `target_pos`, `response_pos` (`null`
-  if the deadline was hit), `correct`, `rt` (time from the response stage
-  starting to the click/selection, `null` on a timeout), `fixation_rt`
-  (time from trial start to the response stage starting — i.e.
-  cross-fixation hold time plus however long the cue was viewed),
-  `timed_out`, `is_tutorial`, `block_number` (`0` for the tutorial, `1+`
-  for main-session blocks), `block_size`, `block_trial_number` (resets to 1
-  for each new block), `image_concept` (the cued item's THINGS concept
-  name), plus jsPsych's standard trial metadata.
+- Data recorded per trial: `cue_id`, `target_pos` (plus `target_x`/`target_y`
+  — its actual on-screen coordinates, in px relative to the display's
+  center — and `target_ring`/`target_angle`, see below), `response_pos`
+  (`null` if the deadline was hit, plus `response_x`/`response_y`,
+  `response_ring`/`response_angle`, and `response_image` — the concept
+  name of whatever was actually revealed at that position, which differs
+  from `cue_image` when `correct` is `false` — all `null` on a timeout),
+  `correct`, `timed_out`, `is_tutorial`, `block_number` (`0` for the
+  tutorial, `1+` for main-session blocks), `block_size` (the number of
+  images/positions in that block — 12, 18, or 24 by default),
+  `block_trial_number` (resets to 1 for each new block), `cue_image` (the
+  cued item's THINGS concept name, `null` on a catch trial), `catch_trial`
+  (see below), plus jsPsych's standard trial metadata — except `stimulus`
+  and `response`, which are dropped from the saved CSV (via
+  `.ignore(["stimulus", "response"])`) since they're only ever populated by
+  the plain `html-keyboard-response` trials (instructions, transitions,
+  breaks, ITI, debrief), not `circular_memory_grid` rows.
+
+  Rather than pre-computed RT durations, five raw event timestamps (ms,
+  `performance.now()`-based — monotonic and comparable across the whole
+  session, though not wall-clock time) are recorded instead, so any
+  duration can be reconstructed later without committing to a fixed set of
+  derived measures up front:
+  - `fixation_onset` — the fixation cross appears (trial start)
+  - `cue_onset` — the cue image appears (or, on a catch trial, the
+    highlighted target position appears)
+  - `cue_offset` — the cursor leaves the cue, ending the cue-viewing stage
+    and starting the response stage
+  - `choice_reveal` — a position is selected and feedback shown (the
+    underlying item, or on a catch trial just a correct/incorrect border);
+    `null` if the deadline was hit instead
+  - `iti_onset` — feedback stops being shown (after the fixed
+    `feedback` duration) and the inter-trial interval begins
+
+  For example, `cue_offset - cue_onset` is viewing time, `choice_reveal -
+  cue_offset` is response/selection time (the simple-RT measurement on a
+  catch trial), and `iti_onset - choice_reveal` is the (fixed)
+  feedback duration.
 
 `cue_id`/`target_pos`/`response_pos` are local indices (`0..block_size-1`)
 into whichever block is currently active, not global image identifiers —
-join on `image_concept` (or `block_number` + local index) if you need to
-track a specific image across a participant's whole session.
+join on `cue_image` (or `block_number` + local index) if you need to track a
+specific image across a participant's whole session. `target_pos` and
+`response_pos` are only slot ids from that block's ring layout (see
+[js/layout.js](js/layout.js)), not a fixed compass direction — use
+`target_x`/`target_y`/`response_x`/`response_y` if you need actual spatial
+coordinates, or `target_ring`/`response_ring` (`0` = innermost) and
+`target_angle`/`response_angle` (radians, `atan2(y, x)` — `0` points right,
+increasing clockwise, so `-π/2` is straight up) if polar coordinates are
+more convenient. All are recorded directly rather than requiring you to
+re-run `computeLayout` with matching config later.
 
 ## Real stimuli: THINGS dataset
 
@@ -180,7 +247,7 @@ downloaded, not the whole pool. If the manifest is missing, the page shows
 a clear error instead of failing silently.
 
 **Memorability scores aren't wired into the trial data yet** — they'd need
-joining by concept name (the recorded `image_concept` field) against the
+joining by concept name (the recorded `cue_image` field) against the
 [THINGS memorability dataset](https://osf.io/5a7z6/) (`osf -p 5a7z6 clone
 things-memorability`) in your own analysis, or added to the manifest and
 threaded through `stimuliFromManifestEntries()` in
@@ -239,21 +306,24 @@ No code changes needed to try different settings:
 | `tutorial` | `false` | Set to `true` to run a practice tutorial block before the main session |
 | `tutorialSize` | 4 | Number of images in the practice tutorial block, run once before the main session |
 | `tutorialMinCorrect` | 2 | Number of correct responses required per image to pass the tutorial (a cumulative count, not a rolling average) |
-| `blockSizes` | `6,12` | Comma-separated list of possible block sizes; one is chosen at random per block, never repeating the previous block's size (e.g. `6,12,18`) |
+| `blockSizes` | `12,18,24` | Comma-separated list of possible block sizes; one is chosen at random per block, never repeating the previous block's size (e.g. `12,24`) |
 | `criterion` | 0.8 | Average per-image rolling accuracy required to pass a block |
 | `rollingWindow` | 10 | Number of most recent presentations of an image (within its block) that its rolling accuracy is computed over |
 | `maxAttemptsMultiplier` | 10 | A block (or the tutorial) that hasn't passed after `multiplier * size` trials is left behind (not revisited) and the session moves on |
 | `maxTotalTrials` | 2000 | Safety valve: force-ends the session after this many trials total even if blocks remain unfinished |
+| `breakDuration` | 120000 | Max time (ms) a break screen shows between blocks before auto-continuing; pressing any key continues sooner. `0` disables breaks |
+| `catchProb` | 0.05 | Probability any given main-session trial is a catch trial (simple-RT probe, no memory component) instead of a normal memory trial. `0` disables catch trials |
 | `circleSize` | 60 | Diameter (px) of the peripheral position circles; the central cue/cross is always drawn 10px larger |
 | `spacing` | `circleSize * 1.75` | Target distance (px) between adjacent positions' centers, used to size each ring so its items end up this far apart. Defaults to `circleSize` plus a gap of `0.75 * circleSize` between edges, so the gap scales with circle size instead of needing to be hand-tuned alongside it; pass an explicit value to override |
-| `maxRings` | 2 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |
+| `maxRings` | 3 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |
 | `minRingSize` | 6 | A ring is only added if every ring (including the new one) would still end up with at least this many items once the block splits evenly across them — e.g. a 6-image block always stays on a single ring rather than spreading 3 and 3 across two |
 | `ringSpacing` | `circleSize * 0.75` | Radial gap (px) between consecutive rings. Can safely be a bit less than a full circle diameter since the ring stagger already keeps neighboring rings' circles clear of each other |
-| `feedback` | 1000 | Feedback duration in ms after a response |
-| `iti` | 500 | Inter-trial interval in ms |
-| `fixation` | 500 | Required continuous hover time (ms) on the center cross before the cue is revealed |
+| `imageBase` | Cloudflare R2 URL | Folder or URL (no trailing slash) holding `manifest.json` and the stimulus images. Defaults to the resized (256px) set on Cloudflare R2; pass `?imageBase=assets/images` to use the full-size local copy. A cross-origin host must allow CORS for `manifest.json` (it's loaded with `fetch`) |
+| `feedback` | 500 | Fixed feedback duration (ms) after a response, before the trial ends |
+| `iti` | 500 | Inter-trial interval in ms. Shows the same dashed fixation cross as cross-fixation (rather than a blank page), so the transition into the next trial doesn't flash to empty and back |
+| `fixation` | 200 | Required continuous hover time (ms) on the center cross before the cue is revealed |
 | `response` | `fixation` | How a position is selected during the response stage: `fixation` (hover-and-hold, no click) or `click` |
-| `responseFixation` | 500 | In `response=fixation` mode, required continuous hover time (ms) on a position to select it |
+| `responseFixation` | 300 | In `response=fixation` mode, required continuous hover time (ms) on a position to select it |
 | `deadline` | 2000 | Max time (ms) to select a position, timed from the start of the response stage. `0` disables it |
 
 The number of rings *within* a block is computed automatically
@@ -266,32 +336,75 @@ to a position on an outer one. The block's positions are then split as
 evenly as possible across those rings (6 and 6 for a 12-image block on 2
 rings, not proportional to each ring's radius) so every ring has the same
 angular step — combined with the alternating half-step stagger between
-rings, this means an outer ring's positions always fall exactly *between*
-an inner ring's rather than lining up radially with any of them, which is
-what actually keeps a straight path from the center to an outer position
-from crossing directly over an inner one.
+rings, this means an odd ring's positions always fall exactly *between*
+its neighbors' rather than lining up radially with any of them. With 3
+rings, ring 2 lines up with ring 0 again, so a straight path to it can
+cross an inner-ring circle; that's accepted.
 
 Each ring's radius is then sized independently from its own item count so
 that ring's items land ~`spacing` apart, regardless of how the other rings
-turned out — no ring ends up more spread out than `spacing` calls for just
-because a different ring needed more room. `baseRadius` (100px, not
-currently exposed as a param) is a floor under the innermost ring, and
-`ringSpacing` is a floor under the gap between consecutive rings, so rings
-stay visually distinct even when their item counts alone wouldn't require
-much separation.
+turned out. `baseRadius` (100px, not currently exposed as a param) is a
+floor under the innermost ring, and `ringSpacing` is a floor under the gap
+between consecutive rings, so rings stay visually distinct even when their
+item counts alone wouldn't require much separation.
 
-Example: `http://localhost:8765?blockSizes=6,12&criterion=0.75&feedback=600`
+Example: `http://localhost:8765?blockSizes=12,24&criterion=0.75&feedback=600`
 (only 6- or 12-image blocks, a slightly more lenient 75% pass threshold)
 
 ### Inspecting data while testing
 
-The running `jsPsych` instance is exposed as `window.jsPsych` for local
-debugging (harmless to leave in when hosted). In the browser console:
+On `localhost`/`127.0.0.1` (gated on hostname, so none of this happens when
+actually hosted on cognition.run):
+
+- **In Chrome or Edge**, loading the page first shows a one-time prompt to
+  choose the project's root folder. Doing so grants write access to its
+  `data/` folder (created automatically, and already gitignored) for the
+  rest of that page load — no further prompts. Every trial then overwrites
+  `data/session_<timestamp>.csv` with the full dataset collected so far, so
+  there's always a complete, up-to-date CSV on disk even if the session
+  ends early. Click "Skip" to opt out of this for a given run.
+- **Otherwise** (Firefox/Safari, or "Skip" was clicked): every trial
+  instead backs up all data collected so far to `localStorage` (not a file
+  — a crash/refresh-proof safety net), and finishing a session downloads a
+  CSV (`memory_task_data_<timestamp>.csv`) the normal browser way. If a
+  session never reaches the end, recover the backup from the browser
+  console:
+
+  ```js
+  recoverAutosave() // downloads a CSV of whatever was collected before the interruption
+  ```
+
+The running `jsPsych` instance is also exposed as `window.jsPsych` for
+local debugging (harmless to leave in when hosted). In the browser
+console, mid-session or after:
 
 ```js
 jsPsych.data.get().filter({task: "circular_memory_grid"}).values()
-// or, to download a CSV:
+// or, to download a CSV on demand:
 jsPsych.data.get().localSave("csv", "memory_task_data.csv")
+```
+
+### Analyzing a session in Python
+
+[notebooks/load_session.ipynb](notebooks/load_session.ipynb) loads a
+session CSV and computes `seen_repetition`, `seen_recency`, `rt` (cue
+onset to cue offset), and `movement_rt` (cue offset to choice reveal) per
+memory trial — set `CSV_PATH` in the notebook to the file you want. Needs
+`pandas`/`numpy`/`matplotlib`/`seaborn`/`jupyter` from `requirements.txt`
+(`pip install -r requirements.txt` inside the `psychophysics` venv); a
+matching Jupyter kernel can be registered with:
+
+```bash
+psychophysics/bin/python -m ipykernel install --user --name=psychophysics --display-name="psychophysics"
+```
+
+Plots use the `figure_style` package (styling conventions shared with the
+`analysis`/`memory-latent-variable` sibling projects) — it's a local
+sibling repo, not on PyPI, so install it separately as an editable package
+(adjust the path to wherever `figure-style` lives on your machine):
+
+```bash
+psychophysics/bin/pip install -e /path/to/figure-style
 ```
 
 ## Moving to cognition.run

@@ -362,6 +362,7 @@ var jsPsychCircularMemoryGrid = (function (jspsych) {
 
   const info = {
     name: "circular-memory-grid",
+    version: "1.0.0",
     parameters: {
       cue_id: { type: jspsych.ParameterType.INT, default: undefined },
       target_pos: { type: jspsych.ParameterType.INT, default: undefined },

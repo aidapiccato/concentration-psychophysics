@@ -64,6 +64,15 @@ const EXPERIMENT_CONFIG = (function () {
     // end of the session (only when hosted -- never on localhost). Paste the
     // code here, or pass ?completionCode=... on the study URL.
     prolificCompletionCode: params.get("completionCode") || "CJUPQSZ5", 
+    // Whether to require a usable window (and a mouse/trackpad) before the
+    // task starts. Pass ?windowCheck=off to skip it, e.g. when testing on a
+    // small screen.
+    windowCheck: params.get("windowCheck") !== "off",
+    // Blocks whose grid wouldn't fit the window are drawn smaller — circles
+    // and every distance between them scaled by the same factor — so it
+    // does. This is the smallest factor allowed: a window that would need
+    // a smaller one is asked to be enlarged instead (see windowCheck).
+    minScale: params.has("minScale") ? parseFloat(params.get("minScale")) : 0.6,
     feedbackDuration: parseInt(params.get("feedback"), 10) || 500,
     interTrialInterval: parseInt(params.get("iti"), 10) || 500,
     fixationDuration: parseInt(params.get("fixation"), 10) || 200,
@@ -659,12 +668,128 @@ function showStartupError(message) {
     `<p style="color:#c0392b; max-width:500px; text-align:center;">${message}</p>`;
 }
 
+// The options every block's layout is computed with — shared so the window
+// check below measures exactly the layouts the task will draw. `scale`
+// shrinks every length (circle size and all distances) by the same factor.
+function layoutOptionsFor(cfg, scale) {
+  scale = scale || 1;
+  return {
+    baseRadius: 100 * scale,
+    ringSpacing: cfg.ringSpacing * scale,
+    itemSpacing: cfg.itemSpacing * scale,
+    maxRings: cfg.maxRings,
+    minRingSize: cfg.minRingSize,
+  };
+}
+
+// Room (px) needed above and below the grid for the hint label and margins,
+// and to the sides of it.
+const WINDOW_LABEL_ALLOWANCE = 50;
+const WINDOW_SIDE_ALLOWANCE = 20;
+
+// Side (px) of the square that holds a block's grid, at full size.
+function gridSizeAt(cfg, n, scale) {
+  scale = scale || 1;
+  const layout = computeLayout(n, layoutOptionsFor(cfg, scale));
+  return computeContainerGeometry(layout, cfg.positionDiameter * scale).size;
+}
+
+// Factor (at most 1) by which a grid of `gridSize` px must shrink to fit the
+// current window without scrolling.
+function fitScale(gridSize) {
+  return Math.min(
+    1,
+    (window.innerWidth - WINDOW_SIDE_ALLOWANCE) / gridSize,
+    (window.innerHeight - WINDOW_LABEL_ALLOWANCE) / gridSize
+  );
+}
+
+// Lays out a block for the current window: full size if it fits, otherwise
+// shrunk (see fitScale). Returns the positions plus the circle diameter and
+// scale actually used, which the plugin and ITI screen need to draw it.
+function computeBlockLayout(cfg, n) {
+  const scale = fitScale(gridSizeAt(cfg, n, 1));
+  return {
+    layout: computeLayout(n, layoutOptionsFor(cfg, scale)),
+    positionDiameter: cfg.positionDiameter * scale,
+    layoutScale: scale,
+  };
+}
+
+// Largest block's grid at full size (the one that needs the most room).
+function biggestGridSize(cfg) {
+  const sizes = cfg.blockSizes.concat(cfg.tutorialEnabled ? [cfg.tutorialSize] : []);
+  return Math.max(...sizes.map((n) => gridSizeAt(cfg, n, 1)));
+}
+
+// Smallest window (CSS px) the biggest block can be drawn in without
+// shrinking below cfg.minScale.
+function minimumWindowSize(cfg) {
+  const grid = Math.ceil(biggestGridSize(cfg) * cfg.minScale);
+  return { width: grid + WINDOW_SIDE_ALLOWANCE, height: grid + WINDOW_LABEL_ALLOWANCE };
+}
+
+// Full-page overlay asking for a bigger window (or, on a phone/tablet, a
+// computer with a mouse). Resolves once the window is big enough to draw the
+// biggest block at cfg.minScale or larger;
+// the overlay then keeps watching, and comes back if the window is later
+// made too small.
+function waitForUsableWindow(cfg) {
+  if (!cfg.windowCheck) return Promise.resolve();
+  const need = minimumWindowSize(cfg);
+  const touchOnly = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+
+  const overlay = document.createElement("div");
+  overlay.id = "window-size-overlay";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:100000; display:none; align-items:center; justify-content:center;" +
+    "background:#f7f7f9; text-align:center; padding:24px; box-sizing:border-box;" +
+    "font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#333;";
+  document.body.appendChild(overlay);
+
+  function usable() {
+    if (touchOnly) {
+      overlay.innerHTML =
+        '<div style="max-width:480px"><h2>Please use a computer</h2>' +
+        "<p>This task needs a computer with a mouse or trackpad. Please reopen the link on a desktop or laptop.</p></div>";
+      overlay.style.display = "flex";
+      return false;
+    }
+    const ok = window.innerWidth >= need.width && window.innerHeight >= need.height;
+    if (ok) {
+      overlay.style.display = "none";
+    } else {
+      overlay.innerHTML =
+        '<div style="max-width:520px"><h2>Please make your browser window larger</h2>' +
+        `<p>The task needs a window at least ${need.width} &times; ${need.height} pixels to show everything at a readable size. ` +
+        `Yours is ${window.innerWidth} &times; ${window.innerHeight}.</p>` +
+        "<p>Try maximizing the window, going full screen (F11 on Windows, Ctrl+Cmd+F on a Mac), " +
+        "or zooming out (Ctrl or Cmd and the minus key). The task will start automatically once the window is large enough.</p></div>";
+      overlay.style.display = "flex";
+    }
+    return ok;
+  }
+
+  return new Promise((resolve) => {
+    let started = false;
+    const check = () => {
+      if (usable() && !started) {
+        started = true;
+        resolve();
+      }
+    };
+    window.addEventListener("resize", check);
+    check();
+  });
+}
+
 // Starts immediately if the page has already finished loading (a host may
 // inject this script after DOMContentLoaded has fired, in which case a plain
 // listener would never run).
 async function startTask() {
   try {
     ensureDisplayElement();
+    await waitForUsableWindow(EXPERIMENT_CONFIG);
     await runExperiment();
   } catch (err) {
     // Anything that goes wrong during setup (missing manifest, a CDN
@@ -801,6 +926,8 @@ async function runExperiment() {
   // Exposed for local debugging/iteration only (e.g. jsPsych.data.get() in
   // the browser console). Harmless to leave in for cognition.run hosting.
   window.jsPsych = jsPsych;
+  // Saved on every row so participants' screens can be checked afterwards.
+  jsPsych.data.addProperties({ window_width: window.innerWidth, window_height: window.innerHeight });
 
   const manifest = await loadStimulusManifest();
 
@@ -864,13 +991,7 @@ async function runExperiment() {
       size: size,
       stimuli: stimuli,
       positionStimMap: jsPsych.randomization.shuffle(stimuli.map((s) => s.id)),
-      layout: computeLayout(size, {
-        baseRadius: 100,
-        ringSpacing: cfg.ringSpacing,
-        itemSpacing: cfg.itemSpacing,
-        maxRings: cfg.maxRings,
-        minRingSize: cfg.minRingSize,
-      }),
+      ...computeBlockLayout(cfg, size),
       history: {}, // regular blocks: localIdx -> array of recent bool outcomes
       correctCounts: new Array(size).fill(0), // tutorial: localIdx -> cumulative correct count
       trialCount: 0,
@@ -1022,7 +1143,7 @@ async function runExperiment() {
     stimulus: function () {
       const { size, centerX, centerY, cueDiameter, cueRadius } = computeContainerGeometry(
         activeBlock.layout,
-        cfg.positionDiameter
+        activeBlock.positionDiameter
       );
       return (
         '<div class="cmg-cue-label"></div>' +
@@ -1058,6 +1179,7 @@ async function runExperiment() {
         console.info(`[task] session clock started; time limit ${(cfg.sessionTimeLimit / 60000).toFixed(1)} min (0 = none)`);
       }
       trial.positions = activeBlock.layout;
+      trial.position_diameter = activeBlock.positionDiameter;
       trial.stimuli = activeBlock.stimuli;
       trial.position_stim_map = activeBlock.positionStimMap;
       // Catch trials are a simple-RT probe, not a memory test — never
@@ -1083,6 +1205,8 @@ async function runExperiment() {
           block_size: activeBlock.size,
           block_trial_number: activeBlock.trialCount + 1,
           cue_image: null,
+          circle_diameter: activeBlock.positionDiameter,
+          layout_scale: activeBlock.layoutScale,
         };
         return;
       }
@@ -1098,6 +1222,8 @@ async function runExperiment() {
         block_size: activeBlock.size,
         block_trial_number: activeBlock.trialCount + 1,
         cue_image: activeBlock.stimuli[localIdx].label,
+        circle_diameter: activeBlock.positionDiameter,
+        layout_scale: activeBlock.layoutScale,
       };
     },
     on_finish: function (data) {

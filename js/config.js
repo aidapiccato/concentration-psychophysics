@@ -54,6 +54,15 @@ const EXPERIMENT_CONFIG = (function () {
     // end of the session (only when hosted -- never on localhost). Paste the
     // code here, or pass ?completionCode=... on the study URL.
     prolificCompletionCode: params.get("completionCode") || "CJUPQSZ5", 
+    // Whether to require a usable window (and a mouse/trackpad) before the
+    // task starts. Pass ?windowCheck=off to skip it, e.g. when testing on a
+    // small screen.
+    windowCheck: params.get("windowCheck") !== "off",
+    // Blocks whose grid wouldn't fit the window are drawn smaller — circles
+    // and every distance between them scaled by the same factor — so it
+    // does. This is the smallest factor allowed: a window that would need
+    // a smaller one is asked to be enlarged instead (see windowCheck).
+    minScale: params.has("minScale") ? parseFloat(params.get("minScale")) : 0.6,
     feedbackDuration: parseInt(params.get("feedback"), 10) || 500,
     interTrialInterval: parseInt(params.get("iti"), 10) || 500,
     fixationDuration: parseInt(params.get("fixation"), 10) || 200,

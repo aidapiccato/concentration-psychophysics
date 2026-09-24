@@ -320,6 +320,8 @@ No code changes needed to try different settings:
 | `minRingSize` | 6 | A ring is only added if every ring (including the new one) would still end up with at least this many items once the block splits evenly across them — e.g. a 6-image block always stays on a single ring rather than spreading 3 and 3 across two |
 | `ringSpacing` | `circleSize * 0.75` | Radial gap (px) between consecutive rings. Can safely be a bit less than a full circle diameter since the ring stagger already keeps neighboring rings' circles clear of each other |
 | `imageBase` | Cloudflare R2 URL | Folder or URL (no trailing slash) holding `manifest.json` and the stimulus images. Defaults to the resized (256px) set on Cloudflare R2; pass `?imageBase=assets/images` to use the full-size local copy. A cross-origin host must allow CORS for `manifest.json` (it's loaded with `fetch`) |
+| `windowCheck` | on | Before the task starts, requires a window big enough to draw the biggest block's grid at `minScale` or larger (about 552 × 582 px by default), and a mouse/trackpad device; re-checked if the window is later shrunk. Pass `?windowCheck=off` to skip it |
+| `minScale` | 0.6 | Smallest factor a block's grid (circles and all distances) may be shrunk by to fit the window. Blocks that fit are drawn at full size; a window that would need a smaller factor is asked to be enlarged instead |
 | `feedback` | 500 | Fixed feedback duration (ms) after a response, before the trial ends |
 | `iti` | 500 | Inter-trial interval in ms. Shows the same dashed fixation cross as cross-fixation (rather than a blank page), so the transition into the next trial doesn't flash to empty and back |
 | `fixation` | 200 | Required continuous hover time (ms) on the center cross before the cue is revealed |
@@ -348,6 +350,16 @@ turned out. `baseRadius` (100px, not currently exposed as a param) is a
 floor under the innermost ring, and `ringSpacing` is a floor under the gap
 between consecutive rings, so rings stay visually distinct even when their
 item counts alone wouldn't require much separation.
+
+**Fit to window.** A bigger block needs more rings and so more room (a
+24-image grid is about 886px across at the default circle size). Each
+block's layout is computed for the window at the moment the block starts:
+if the grid wouldn't fit without scrolling, the circles and every distance
+between them are scaled down together by whatever factor makes it fit (never
+below `minScale`, and never above full size). Each trial records the result
+as `circle_diameter` and `layout_scale`, and the window size as
+`window_width`/`window_height`, so any effect of the scale on movement
+times can be checked afterwards.
 
 Example: `http://localhost:8765?blockSizes=12,24&criterion=0.75&feedback=600`
 (only 6- or 12-image blocks, a slightly more lenient 75% pass threshold)

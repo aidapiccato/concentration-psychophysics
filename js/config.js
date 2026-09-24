@@ -89,7 +89,12 @@ const EXPERIMENT_CONFIG = (function () {
     breakDuration: params.has("breakDuration") ? parseInt(params.get("breakDuration"), 10) : 120000,
     rollingWindow: parseInt(params.get("rollingWindow"), 10) || 10,
     blockCriterion: parseFloat(params.get("criterion")) || 0.8,
-    maxAttemptsMultiplier: parseInt(params.get("maxAttemptsMultiplier"), 20) || 10,
+    maxAttemptsMultiplier: parseInt(params.get("maxAttemptsMultiplier"), 10) || 10,
+    // Hard time limit (minutes) on the main session, timed from its first
+    // trial: once it has passed, the session ends right after the current
+    // trial, even in the middle of a block, and goes to the debrief. Pass
+    // ?timeLimit=0 to disable it.
+    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 50) * 60 * 1000,
     // Safety valve: force-ends the session after this many trials total
     // even if blocks remain unfinished, so a subject can't get stuck
     // indefinitely.

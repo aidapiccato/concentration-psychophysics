@@ -200,6 +200,18 @@ async function runExperiment() {
   let totalTrialsRun = 0;
   let transitionMessage = "";
   let sessionAborted = false;
+  // Set when the first main-session trial starts; see cfg.sessionTimeLimit.
+  let sessionStartTime = null;
+
+  // True once cfg.sessionTimeLimit has passed since the first main-session
+  // trial (never during the tutorial, and never if the limit is disabled).
+  function timeLimitReached() {
+    return (
+      cfg.sessionTimeLimit > 0 &&
+      sessionStartTime !== null &&
+      performance.now() - sessionStartTime >= cfg.sessionTimeLimit
+    );
+  }
 
   function buildBlock(kind, entries, size) {
     const stimuli = stimuliFromManifestEntries(entries);
@@ -281,6 +293,11 @@ async function runExperiment() {
             : "That was the last set.";
       }
       if (totalTrialsRun >= cfg.maxTotalTrials) {
+        sessionAborted = true;
+      }
+      // Time limit (also enforced mid-block, in blockLoop): don't start a
+      // new block once it has passed.
+      if (timeLimitReached()) {
         sessionAborted = true;
       }
     } else {
@@ -393,6 +410,9 @@ async function runExperiment() {
     response_deadline: cfg.responseDeadline,
     position_diameter: cfg.positionDiameter,
     on_start: function (trial) {
+      if (sessionStartTime === null && activeBlock.kind !== "tutorial") {
+        sessionStartTime = performance.now();
+      }
       trial.positions = activeBlock.layout;
       trial.stimuli = activeBlock.stimuli;
       trial.position_stim_map = activeBlock.positionStimMap;
@@ -462,6 +482,13 @@ async function runExperiment() {
       }
       if (totalTrialsRun >= cfg.maxTotalTrials) {
         activeBlock.passed = false;
+        return false;
+      }
+      // Hard time limit: ends the block in progress right after the current
+      // trial and, via sessionAborted, the whole session.
+      if (timeLimitReached()) {
+        activeBlock.passed = false;
+        sessionAborted = true;
         return false;
       }
       return true;

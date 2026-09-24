@@ -310,6 +310,7 @@ No code changes needed to try different settings:
 | `criterion` | 0.8 | Average per-image rolling accuracy required to pass a block |
 | `rollingWindow` | 10 | Number of most recent presentations of an image (within its block) that its rolling accuracy is computed over |
 | `maxAttemptsMultiplier` | 10 | A block (or the tutorial) that hasn't passed after `multiplier * size` trials is left behind (not revisited) and the session moves on |
+| `timeLimit` | 50 | Hard time limit in minutes for the main session, timed from its first trial. Once it has passed, the session ends right after the current trial — even mid-block — and goes to the debrief. `0` disables it |
 | `maxTotalTrials` | 2000 | Safety valve: force-ends the session after this many trials total even if blocks remain unfinished |
 | `breakDuration` | 120000 | Max time (ms) a break screen shows between blocks before auto-continuing; pressing any key continues sooner. `0` disables breaks |
 | `catchProb` | 0.05 | Probability any given main-session trial is a catch trial (simple-RT probe, no memory component) instead of a normal memory trial. `0` disables catch trials |

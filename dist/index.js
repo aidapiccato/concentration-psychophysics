@@ -99,7 +99,12 @@ const EXPERIMENT_CONFIG = (function () {
     breakDuration: params.has("breakDuration") ? parseInt(params.get("breakDuration"), 10) : 120000,
     rollingWindow: parseInt(params.get("rollingWindow"), 10) || 10,
     blockCriterion: parseFloat(params.get("criterion")) || 0.8,
-    maxAttemptsMultiplier: parseInt(params.get("maxAttemptsMultiplier"), 20) || 10,
+    maxAttemptsMultiplier: parseInt(params.get("maxAttemptsMultiplier"), 10) || 10,
+    // Hard time limit (minutes) on the main session, timed from its first
+    // trial: once it has passed, the session ends right after the current
+    // trial, even in the middle of a block, and goes to the debrief. Pass
+    // ?timeLimit=0 to disable it.
+    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 50) * 60 * 1000,
     // Safety valve: force-ends the session after this many trials total
     // even if blocks remain unfinished, so a subject can't get stuck
     // indefinitely.
@@ -838,6 +843,18 @@ async function runExperiment() {
   let totalTrialsRun = 0;
   let transitionMessage = "";
   let sessionAborted = false;
+  // Set when the first main-session trial starts; see cfg.sessionTimeLimit.
+  let sessionStartTime = null;
+
+  // True once cfg.sessionTimeLimit has passed since the first main-session
+  // trial (never during the tutorial, and never if the limit is disabled).
+  function timeLimitReached() {
+    return (
+      cfg.sessionTimeLimit > 0 &&
+      sessionStartTime !== null &&
+      performance.now() - sessionStartTime >= cfg.sessionTimeLimit
+    );
+  }
 
   function buildBlock(kind, entries, size) {
     const stimuli = stimuliFromManifestEntries(entries);
@@ -919,6 +936,11 @@ async function runExperiment() {
             : "That was the last set.";
       }
       if (totalTrialsRun >= cfg.maxTotalTrials) {
+        sessionAborted = true;
+      }
+      // Time limit (also enforced mid-block, in blockLoop): don't start a
+      // new block once it has passed.
+      if (timeLimitReached()) {
         sessionAborted = true;
       }
     } else {
@@ -1031,6 +1053,9 @@ async function runExperiment() {
     response_deadline: cfg.responseDeadline,
     position_diameter: cfg.positionDiameter,
     on_start: function (trial) {
+      if (sessionStartTime === null && activeBlock.kind !== "tutorial") {
+        sessionStartTime = performance.now();
+      }
       trial.positions = activeBlock.layout;
       trial.stimuli = activeBlock.stimuli;
       trial.position_stim_map = activeBlock.positionStimMap;
@@ -1100,6 +1125,13 @@ async function runExperiment() {
       }
       if (totalTrialsRun >= cfg.maxTotalTrials) {
         activeBlock.passed = false;
+        return false;
+      }
+      // Hard time limit: ends the block in progress right after the current
+      // trial and, via sessionAborted, the whole session.
+      if (timeLimitReached()) {
+        activeBlock.passed = false;
+        sessionAborted = true;
         return false;
       }
       return true;

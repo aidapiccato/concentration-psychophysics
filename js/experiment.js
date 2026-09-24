@@ -412,6 +412,7 @@ async function runExperiment() {
     on_start: function (trial) {
       if (sessionStartTime === null && activeBlock.kind !== "tutorial") {
         sessionStartTime = performance.now();
+        console.info(`[task] session clock started; time limit ${(cfg.sessionTimeLimit / 60000).toFixed(1)} min (0 = none)`);
       }
       trial.positions = activeBlock.layout;
       trial.stimuli = activeBlock.stimuli;
@@ -487,6 +488,7 @@ async function runExperiment() {
       // Hard time limit: ends the block in progress right after the current
       // trial and, via sessionAborted, the whole session.
       if (timeLimitReached()) {
+        console.info("[task] time limit reached; ending the session");
         activeBlock.passed = false;
         sessionAborted = true;
         return false;

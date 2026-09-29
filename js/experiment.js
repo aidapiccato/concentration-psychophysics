@@ -404,16 +404,11 @@ async function runExperiment() {
     if (currentMainBlock) {
       if (currentMainBlock.passed) {
         completedBlockCount++;
-        transitionMessage =
-          blockQueue.length > 0
-            ? "Nice work! Starting a new set of shapes."
-            : "Nice work! That was the last set.";
-      } else {
-        transitionMessage =
-          blockQueue.length > 0
-            ? "Let's move on to a different set of shapes."
-            : "That was the last set.";
       }
+      transitionMessage =
+        blockQueue.length > 0
+          ? "Let's move on to a new set of images."
+          : "That was the last set.";
       if (totalTrialsRun >= cfg.maxTotalTrials) {
         sessionAborted = true;
       }
@@ -423,7 +418,7 @@ async function runExperiment() {
         sessionAborted = true;
       }
     } else {
-      transitionMessage = "Starting the first set of shapes.";
+      transitionMessage = "Starting the first set of images.";
     }
 
     if (sessionAborted || blockQueue.length === 0) {
@@ -650,7 +645,7 @@ async function runExperiment() {
     type: jsPsychHtmlKeyboardResponse,
     stimulus:
       "<h2>Practice complete!</h2>" +
-      "<p>Now you'll move on to the main task, with larger sets of shapes.</p>" +
+      "<p>Now you'll move on to the main task, with larger sets of images.</p>" +
       "<p>Press any key to begin.</p>",
     choices: "ALL_KEYS",
     on_finish: function () {

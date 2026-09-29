@@ -182,6 +182,20 @@ var jsPsychCircularMemoryGrid = (function (jspsych) {
         const responsePosition = responsePos === null ? null : trial.positions.find((p) => p.index === responsePos);
         const responseImage = responsePos === null ? null : stimuli[trial.position_stim_map[responsePos]].label;
         this.jsPsych.finishTrial({
+          // trial.data (set per-trial in experiment.js's on_start) is meant
+          // to be merged into the saved record automatically by jsPsych's
+          // own `data` trial parameter — but cognition.run's hosted data
+          // capture doesn't pick up that merge for this custom plugin, only
+          // whatever finishTrial() itself returns. Listing them here
+          // explicitly, redundant as it looks locally, is what makes them
+          // survive the cognition.run export.
+          task: trial.data && trial.data.task,
+          catch_trial: trial.catch_trial,
+          is_tutorial: trial.data && trial.data.is_tutorial,
+          block_number: trial.data && trial.data.block_number,
+          block_size: trial.data && trial.data.block_size,
+          block_trial_number: trial.data && trial.data.block_trial_number,
+          cue_image: trial.data ? trial.data.cue_image : null,
           cue_id: trial.cue_id,
           target_pos: trial.target_pos,
           target_x: targetPosition.x,

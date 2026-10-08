@@ -26,6 +26,10 @@ html, body {
   font-size: 18px;
   color: #333;
   margin: 20px 0;
+  /* Fixed height so the grid below doesn't shift when hint text appears
+     in or disappears from an otherwise empty label. */
+  height: 24px;
+  line-height: 24px;
 }
 
 .cmg-cue {
@@ -104,6 +108,10 @@ html, body {
 }
 
 .cmg-catch-highlight {
+  /* Filled yellow (and fully opaque, overriding .cmg-dimmed) so the target
+     stands out against the gray circles. */
+  background: #f1c40f;
+  opacity: 1;
   border: 3px solid #f1c40f;
   animation: cmg-catch-pulse 0.6s ease-in-out infinite alternate;
 }

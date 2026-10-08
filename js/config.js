@@ -113,9 +113,9 @@ const EXPERIMENT_CONFIG = (function () {
     // image pool) run before the main session, using its own pass
     // criterion — every image must be answered correctly at least
     // tutorialMinCorrect times (a plain cumulative count, not a rolling
-    // average like the main blocks use). Off by default; pass
-    // ?tutorial=true to enable it.
-    tutorialEnabled: params.get("tutorial") === "true",
+    // average like the main blocks use). On by default; pass
+    // ?tutorial=false to skip it.
+    tutorialEnabled: params.get("tutorial") !== "false",
     tutorialSize: parseInt(params.get("tutorialSize"), 10) || 4,
     tutorialMinCorrect: parseInt(params.get("tutorialMinCorrect"), 10) || 1,
   };

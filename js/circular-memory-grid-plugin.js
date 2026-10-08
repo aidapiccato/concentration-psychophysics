@@ -223,8 +223,8 @@ var jsPsychCircularMemoryGrid = (function (jspsych) {
         responsiveStartTime = performance.now();
         labelEl.textContent = trial.show_hints
           ? trial.response_mode === "fixation"
-            ? "Hover where you think this object is"
-            : "Click where you think this object is"
+            ? "Hover where you think this image is"
+            : "Click where you think this image is"
           : "";
         // The cross/cue is no longer relevant once searching/selecting —
         // remove it entirely rather than leaving the dashed outline behind.

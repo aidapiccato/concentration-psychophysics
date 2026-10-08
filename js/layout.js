@@ -60,6 +60,10 @@ function computeLayout(n, opts) {
   // it if every ring (including the new one) still ends up with at least
   // this many items.
   const minRingSize = opts.minRingSize || 1;
+  // Floor under ring 0's radius only (it doesn't affect how many rings are
+  // used) — keeps a block with very few positions, like the tutorial's, from
+  // sitting right up against the center cue; see layoutOptionsFor.
+  const minInnerRadius = opts.minInnerRadius || 0;
 
   const numRings = Math.min(
     computeNumRings(n, itemSpacing, baseRadius, ringSpacing),
@@ -82,7 +86,7 @@ function computeLayout(n, opts) {
   const radii = [];
   for (let r = 0; r < numRings; r++) {
     const idealRadius = (counts[r] * itemSpacing) / (2 * Math.PI);
-    const minRadius = r === 0 ? baseRadius : radii[r - 1] + ringSpacing;
+    const minRadius = r === 0 ? Math.max(baseRadius, minInnerRadius) : radii[r - 1] + ringSpacing;
     radii.push(Math.max(idealRadius, minRadius));
   }
 

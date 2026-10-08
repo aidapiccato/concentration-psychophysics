@@ -23,6 +23,10 @@ function layoutOptionsFor(cfg, scale) {
   scale = scale || 1;
   return {
     baseRadius: 100 * scale,
+    // Same inner-ring radius a regular block gets (a ring of minRingSize
+    // items at itemSpacing), so small blocks like the tutorial's don't draw
+    // their circles crowded up against the center cue.
+    minInnerRadius: ((cfg.minRingSize * cfg.itemSpacing) / (2 * Math.PI)) * scale,
     ringSpacing: cfg.ringSpacing * scale,
     itemSpacing: cfg.itemSpacing * scale,
     maxRings: cfg.maxRings,
@@ -436,36 +440,56 @@ async function runExperiment() {
 
   const selectInstruction =
     cfg.responseMode === "fixation"
-      ? "Hold your mouse over the circle there to make a selection and reveal the object underneath it."
-      : "Click the circle to make a selection and reveal the object underneath it.";
+      ? "Hold your mouse over the circle there to make a selection and reveal the image underneath it."
+      : "Click the circle to make a selection and reveal the image underneath it.";
   const selectVerb = cfg.responseMode === "fixation" ? "selectable by hovering" : "clickable";
   const deadlineWarning =
     cfg.responseDeadline > 0
-      ? ` You'll have ${(cfg.responseDeadline / 1000).toFixed(1)} seconds to do this once you move your mouse away from the cue object, so decide before then.`
+      ? ` You'll have ${(cfg.responseDeadline / 1000).toFixed(1)} seconds to do this once you move your mouse away from the cue image, so decide before then.`
       : "";
 
   const instructions = {
     type: jsPsychInstructions,
     pages: [
       "<h2>Memory Task</h2>" +
-        "<p>The goal of this task is to learn and recall the location of hidden objects.</p>" +
-        "<p>You'll be cued with an object, and then asked to respond with the location of that object. </p>",
+        "<p>The goal of this task is to learn and recall the location of hidden images.</p>" +
+        "<p>You'll be cued with an image, and then asked to respond with the location of that image. </p>",
 
-        "<p>On each trial, the circles around the edge are where an object might be hidden.</p>" +
-        "<p>Hold your mouse over the cross in the center and keep it there. Once you've held still long enough, the cue object will appear.</p>" +
-        "<p>Once the object appears, hold the mouse there and look at it for as long as you like." + 
-        "<p>The cue object will dissapear once you move your mouse.",
+        "<p>On each trial, the circles around the edge are where an image might be hidden.</p>" +
+        "<p>Hold your mouse over the cross in the center and keep it there. Once you've held still long enough, the cue image will appear.</p>" +
+        "<p>Once the image appears, hold the mouse there and look at it for as long as you like." + 
+        "<p>The cue image will dissapear once you move your mouse.",
         
-        "<p>When you're ready to answer, move your mouse to the circle on the edge where you think that object is located." +
+        "<p>When you're ready to answer, move your mouse to the circle on the edge where you think that image is located." +
         `<p>${selectInstruction}</p>` +
+        `<p>The image you reveal will only be shown briefly (about ${(cfg.feedbackDuration / 1000).toFixed(1)} seconds).</p>` +
         `<p>${deadlineWarning}</p>`,
       (cfg.tutorialEnabled
         ? "<p>You'll start with a short practice round to get the hang of it, then move on to the main task.</p>" +
-          "<p>In the main task, you'll work through a series of sets &mdash; each with its own group of objects to learn. You'll automatically move on to a new set after some time.</p>"
-        : "<p>You'll work through a series of sets &mdash; each with its own group of objects to learn. You'll automatically move on to a new set after some time.</p>") +
+          "<p>In the main task, you'll work through a series of sets &mdash; each with its own group of images to learn. You'll automatically move on to a new set after some time.</p>"
+        : "<p>You'll work through a series of sets &mdash; each with its own group of images to learn. You'll automatically move on to a new set after some time.</p>") +
         '<p>Click "Next" or press the right arrow key to begin.</p>',
     ],
     show_clickable_nav: true,
+  };
+
+  // First screen: consent. Only the button advances (no key press), so the
+  // participant has to actively click "Continue".
+  const consent = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus:
+      '<div style="max-width: 640px; margin: 0 auto; text-align: left;">' +
+      '<h2 style="text-align: center;">Consent</h2>' +
+      "<p>This online study is part of an MIT scientific research project. Your responses will be kept confidential, de-identified, and may be presented at scientific meetings or shared with other researchers. Prolific IDs and timestamps are collected solely for payment purposes and will not be linked to your legal identity. If you choose to withdraw, any data collected from you will be deleted and not included in the final analysis. For questions regarding your rights as a participant, please contact the MIT COUHES office at couhes@mit.edu. By clicking \"Continue,\" you confirm you are at least 18 years old and voluntarily agree to participate.</p>" +
+      '<p style="text-align: center;"><button id="consent-continue" class="jspsych-btn">Continue</button></p>' +
+      "</div>",
+    choices: "NO_KEYS",
+    data: { task: "consent" },
+    on_load: function () {
+      document.getElementById("consent-continue").addEventListener("click", function () {
+        jsPsych.finishTrial();
+      });
+    },
   };
 
   const blockTransition = {
@@ -641,6 +665,64 @@ async function runExperiment() {
     },
   };
 
+  // Second tutorial, right after the memory practice block: introduces
+  // catch trials with a short explanation and CATCH_TUTORIAL_TRIALS forced
+  // examples, run on the practice block's own grid (activeBlock is still
+  // the tutorial block here). They don't touch the block's trial/accuracy
+  // bookkeeping and are saved as tutorial trials (is_tutorial: true,
+  // block_number 0).
+  const CATCH_TUTORIAL_TRIALS = 2;
+
+  const catchTutorialIntro = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus:
+      "<h2>One more thing</h2>" +
+      "<p>Every so often, instead of an image, one of the circles will light up.</p>" +
+      "<p>When that happens, there is nothing to remember &mdash; just move your mouse to the highlighted circle as quickly as you can.</p>" +
+      `<p>Here are ${CATCH_TUTORIAL_TRIALS} examples.</p>` +
+      "<p>Press any key to continue.</p>",
+    choices: "ALL_KEYS",
+  };
+
+  const catchTutorialTrial = {
+    type: jsPsychCircularMemoryGrid,
+    cue_id: null,
+    target_pos: 0,
+    positions: [],
+    stimuli: [],
+    position_stim_map: [],
+    feedback_duration: cfg.feedbackDuration,
+    fixation_duration: cfg.fixationDuration,
+    response_mode: cfg.responseMode,
+    response_fixation_duration: cfg.responseFixationDuration,
+    response_deadline: cfg.responseDeadline,
+    position_diameter: cfg.positionDiameter,
+    catch_trial: true,
+    show_hints: false,
+    on_start: function (trial) {
+      trial.positions = activeBlock.layout;
+      trial.position_diameter = activeBlock.positionDiameter;
+      trial.stimuli = activeBlock.stimuli;
+      trial.position_stim_map = activeBlock.positionStimMap;
+      trial.target_pos = activeBlock.layout[Math.floor(Math.random() * activeBlock.layout.length)].index;
+      trial.data = {
+        task: "circular_memory_grid",
+        catch_trial: true,
+        is_tutorial: true,
+        block_number: 0,
+        block_size: activeBlock.size,
+        block_trial_number: 0,
+        cue_image: null,
+        circle_diameter: activeBlock.positionDiameter,
+        layout_scale: activeBlock.layoutScale,
+      };
+    },
+  };
+
+  const catchTutorial = {
+    timeline: [catchTutorialIntro, { timeline: [catchTutorialTrial, iti], repetitions: CATCH_TUTORIAL_TRIALS }],
+  };
+
   const postTutorialScreen = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus:
@@ -676,10 +758,20 @@ async function runExperiment() {
         "<h2>Task complete!</h2>" +
         `<p>Sets completed: ${completedBlockCount}</p>` +
         `<p>Your accuracy: ${accuracy}%</p>` +
-        "<p>Press any key to finish.</p>"
+        '<p><button id="return-to-prolific" class="jspsych-btn">Return to Prolific</button></p>'
       );
     },
-    choices: "ALL_KEYS",
+    // Only the button ends the study (no key press), so the participant
+    // can't skip past the return-to-Prolific step by accident.
+    choices: "NO_KEYS",
+    on_load: function () {
+      document.getElementById("return-to-prolific").addEventListener("click", function () {
+        // Ending the last trial finishes the experiment, which runs the
+        // global on_finish above: data is saved/uploaded first, then
+        // (hosted only) redirectToProlific() sends them back to Prolific.
+        jsPsych.finishTrial();
+      });
+    },
   };
 
   // Set up the first active block, before the timeline starts, so
@@ -689,12 +781,12 @@ async function runExperiment() {
   if (cfg.tutorialEnabled) {
     activeBlock = buildBlock("tutorial", tutorialEntries, cfg.tutorialSize);
     transitionMessage = "Let's start with a quick practice round.";
-    timeline = [instructions, blockTransition, blockPreload, blockLoop, postTutorialScreen, sessionLoop, debrief];
+    timeline = [consent, instructions, blockTransition, blockPreload, blockLoop, catchTutorial, postTutorialScreen, sessionLoop, debrief];
   } else {
     // No tutorial: seed the first main-session block directly so
     // sessionLoop's first iteration has an activeBlock to read.
     advanceToNextBlock();
-    timeline = [instructions, sessionLoop, debrief];
+    timeline = [consent, instructions, sessionLoop, debrief];
   }
 
   jsPsych.run(timeline);

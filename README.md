@@ -14,8 +14,7 @@ sequence of performance-gated blocks rather than one long fixed run.
 
 ### Tutorial
 
-Off by default. When enabled (`tutorialEnabled: true`, or pass
-`?tutorial=true`), the participant runs through a single **tutorial
+On by default (pass `?tutorial=false` to skip it). When enabled, the participant runs through a single **tutorial
 block** before the main session — `tutorialSize` images (default 4), drawn
 from the pool before the main session's blocks are generated so the two
 never overlap. With the tutorial off, the instructions screen still runs
@@ -31,8 +30,10 @@ participant practices the actual task, not a simplified stand-in.
 The main jsPsych `instructions` screen (explaining the hover/select
 mechanics) runs once, immediately before the tutorial, and is *not*
 repeated before the main session — by the time the tutorial finishes, the
-participant has already done it for real. A dedicated "Practice complete!"
-screen marks the handoff from tutorial to main session.
+participant has already done it for real. Right after it, a short **catch-trial tutorial** explains the
+highlighted-circle probe and runs 2 forced catch trials on the practice
+grid (saved with `is_tutorial: true`, `catch_trial: true`). A dedicated "Practice complete!"
+screen then marks the handoff from tutorial to main session.
 
 The in-trial guidance text ("Hold your mouse over the cross", "Look away
 when you're ready to respond", "Hover/Click where you've seen this shape")
@@ -303,7 +304,7 @@ No code changes needed to try different settings:
 
 | Param | Default | Meaning |
 |---|---|---|
-| `tutorial` | `false` | Set to `true` to run a practice tutorial block before the main session |
+| `tutorial` | `true` | Set to `false` to skip the practice tutorial block before the main session |
 | `tutorialSize` | 4 | Number of images in the practice tutorial block, run once before the main session |
 | `tutorialMinCorrect` | 2 | Number of correct responses required per image to pass the tutorial (a cumulative count, not a rolling average) |
 | `blockSizes` | `12,18,24` | Comma-separated list of possible block sizes; one is chosen at random per block, never repeating the previous block's size (e.g. `12,24`) |

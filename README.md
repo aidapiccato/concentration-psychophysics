@@ -87,7 +87,7 @@ disable breaks entirely.
 ### Catch trials
 
 On each main-session trial (never the tutorial), with probability
-`catchTrialProbability` (default 0.05) it's a **catch trial** instead of a
+`catchTrialProbability` (default 0.1) it's a **catch trial** instead of a
 normal memory trial: once cross-fixation is satisfied, one peripheral
 position is directly highlighted (a pulsing yellow border) in place of a
 cue image, and the participant is already looking at the center — they
@@ -311,10 +311,10 @@ No code changes needed to try different settings:
 | `criterion` | 0.8 | Average per-image rolling accuracy required to pass a block |
 | `rollingWindow` | 10 | Number of most recent presentations of an image (within its block) that its rolling accuracy is computed over |
 | `maxAttemptsMultiplier` | 10 | A block (or the tutorial) that hasn't passed after `multiplier * size` trials is left behind (not revisited) and the session moves on |
-| `timeLimit` | 30 | Hard time limit in minutes for the main session, timed from its first trial. Once it has passed, the session ends right after the current trial — even mid-block — and goes to the debrief. `0` disables it |
+| `timeLimit` | 45 | Hard time limit in minutes for the main session, timed from its first trial. Once it has passed, the session ends right after the current trial — even mid-block — and goes to the debrief. `0` disables it |
 | `maxTotalTrials` | 2000 | Safety valve: force-ends the session after this many trials total even if blocks remain unfinished |
 | `breakDuration` | 120000 | Max time (ms) a break screen shows between blocks before auto-continuing; pressing any key continues sooner. `0` disables breaks |
-| `catchProb` | 0.05 | Probability any given main-session trial is a catch trial (simple-RT probe, no memory component) instead of a normal memory trial. `0` disables catch trials |
+| `catchProb` | 0.1 | Probability any given main-session trial is a catch trial (simple-RT probe, no memory component) instead of a normal memory trial. `0` disables catch trials |
 | `circleSize` | 60 | Diameter (px) of the peripheral position circles; the central cue/cross is always drawn 10px larger |
 | `spacing` | `circleSize * 1.75` | Target distance (px) between adjacent positions' centers, used to size each ring so its items end up this far apart. Defaults to `circleSize` plus a gap of `0.75 * circleSize` between edges, so the gap scales with circle size instead of needing to be hand-tuned alongside it; pass an explicit value to override |
 | `maxRings` | 4 | Caps how many concentric rings a block's layout can use (see below). Lower is safer against accidental selections but forces circles closer together as block size grows |

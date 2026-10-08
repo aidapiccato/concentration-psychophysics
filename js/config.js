@@ -91,7 +91,7 @@ const EXPERIMENT_CONFIG = (function () {
     // to recall) and the participant just moves to it as fast as possible
     // — a simple-RT probe randomly interspersed throughout the session to
     // help distinguish memory difficulty from attention/fatigue drift.
-    catchTrialProbability: params.has("catchProb") ? parseFloat(params.get("catchProb")) : 0.05,
+    catchTrialProbability: params.has("catchProb") ? parseFloat(params.get("catchProb")) : 0.1,
     // Between main-session blocks (not before the first one), a break
     // screen shows for up to this long — the participant can press any
     // key to continue sooner. Pass ?breakDuration=0 to disable breaks.
@@ -103,7 +103,7 @@ const EXPERIMENT_CONFIG = (function () {
     // trial: once it has passed, the session ends right after the current
     // trial, even in the middle of a block, and goes to the debrief. Pass
     // ?timeLimit=0 to disable it.
-    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 30) * 60 * 1000,
+    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 45) * 60 * 1000,
     // Safety valve: force-ends the session after this many trials total
     // even if blocks remain unfinished, so a subject can't get stuck
     // indefinitely.

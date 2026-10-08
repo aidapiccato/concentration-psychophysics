@@ -756,7 +756,6 @@ async function runExperiment() {
       const accuracy = nTotal > 0 ? Math.round((100 * nCorrect) / nTotal) : 0;
       return (
         "<h2>Task complete!</h2>" +
-        `<p>Sets completed: ${completedBlockCount}</p>` +
         `<p>Your accuracy: ${accuracy}%</p>` +
         '<p><button id="return-to-prolific" class="jspsych-btn">Return to Prolific</button></p>'
       );

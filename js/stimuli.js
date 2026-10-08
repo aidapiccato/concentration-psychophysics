@@ -38,7 +38,8 @@ function stimuliFromManifestEntries(entries) {
 }
 
 // Greedily carves the full manifest into disjoint blocks: shuffle the pool
-// once, then repeatedly slice off a chunk of a randomly-chosen size (from
+// once, then repeatedly slice off a chunk — the first block always the
+// smallest of `sizes`, every later one a randomly-chosen size (from
 // `sizes`, never the same size as the immediately preceding block — with
 // exactly two sizes this means strict alternation; with one size, the
 // no-repeat constraint is impossible so it's just used every time) until
@@ -51,8 +52,9 @@ function generateBlocks(manifest, sizes) {
   let idx = 0;
   let lastSize = null;
   while (true) {
+    // The first block is always the smallest size; the rest are random.
     const choices = sizes.length > 1 ? sizes.filter((s) => s !== lastSize) : sizes;
-    const size = choices[Math.floor(Math.random() * choices.length)];
+    const size = lastSize === null ? Math.min(...sizes) : choices[Math.floor(Math.random() * choices.length)];
     if (idx + size > pool.length) break;
     blocks.push({
       entries: pool.slice(idx, idx + size),

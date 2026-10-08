@@ -101,7 +101,7 @@ const EXPERIMENT_CONFIG = (function () {
     // to recall) and the participant just moves to it as fast as possible
     // — a simple-RT probe randomly interspersed throughout the session to
     // help distinguish memory difficulty from attention/fatigue drift.
-    catchTrialProbability: params.has("catchProb") ? parseFloat(params.get("catchProb")) : 0.05,
+    catchTrialProbability: params.has("catchProb") ? parseFloat(params.get("catchProb")) : 0.1,
     // Between main-session blocks (not before the first one), a break
     // screen shows for up to this long — the participant can press any
     // key to continue sooner. Pass ?breakDuration=0 to disable breaks.
@@ -113,7 +113,7 @@ const EXPERIMENT_CONFIG = (function () {
     // trial: once it has passed, the session ends right after the current
     // trial, even in the middle of a block, and goes to the debrief. Pass
     // ?timeLimit=0 to disable it.
-    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 30) * 60 * 1000,
+    sessionTimeLimit: (params.has("timeLimit") ? parseFloat(params.get("timeLimit")) : 45) * 60 * 1000,
     // Safety valve: force-ends the session after this many trials total
     // even if blocks remain unfinished, so a subject can't get stuck
     // indefinitely.
@@ -172,7 +172,8 @@ function stimuliFromManifestEntries(entries) {
 }
 
 // Greedily carves the full manifest into disjoint blocks: shuffle the pool
-// once, then repeatedly slice off a chunk of a randomly-chosen size (from
+// once, then repeatedly slice off a chunk — the first block always the
+// smallest of `sizes`, every later one a randomly-chosen size (from
 // `sizes`, never the same size as the immediately preceding block — with
 // exactly two sizes this means strict alternation; with one size, the
 // no-repeat constraint is impossible so it's just used every time) until
@@ -185,8 +186,9 @@ function generateBlocks(manifest, sizes) {
   let idx = 0;
   let lastSize = null;
   while (true) {
+    // The first block is always the smallest size; the rest are random.
     const choices = sizes.length > 1 ? sizes.filter((s) => s !== lastSize) : sizes;
-    const size = choices[Math.floor(Math.random() * choices.length)];
+    const size = lastSize === null ? Math.min(...sizes) : choices[Math.floor(Math.random() * choices.length)];
     if (idx + size > pool.length) break;
     blocks.push({
       entries: pool.slice(idx, idx + size),
@@ -1427,7 +1429,6 @@ async function runExperiment() {
       const accuracy = nTotal > 0 ? Math.round((100 * nCorrect) / nTotal) : 0;
       return (
         "<h2>Task complete!</h2>" +
-        `<p>Sets completed: ${completedBlockCount}</p>` +
         `<p>Your accuracy: ${accuracy}%</p>` +
         '<p><button id="return-to-prolific" class="jspsych-btn">Return to Prolific</button></p>'
       );

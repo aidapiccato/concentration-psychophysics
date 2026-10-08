@@ -51,8 +51,23 @@ def main():
             "  document.head.appendChild(style);\n"
             "})();\n"
         )
+    # The scripts are wrapped in one function so that (a) their top-level
+    # const/let/function declarations (EXPERIMENT_CONFIG, isLocalDev, ...)
+    # never land in the page's global scope, and (b) if the host evaluates this
+    # bundle twice in the same page, the second run exits instead of throwing
+    # "Identifier 'EXPERIMENT_CONFIG' has already been declared" -- or worse,
+    # starting a second copy of the task.
+    parts.append(
+        "(function () {\n"
+        "  if (window.__memoryTaskBundleLoaded) {\n"
+        '    console.warn("Task bundle already loaded in this page; skipping the second load.");\n'
+        "    return;\n"
+        "  }\n"
+        "  window.__memoryTaskBundleLoaded = true;\n"
+    )
     for script_path in script_paths:
         parts.append(f"// ---- {script_path} ----\n" + (PROJECT_ROOT / script_path).read_text())
+    parts.append("})();\n")
 
     out = PROJECT_ROOT / "dist" / "index.js"
     out.parent.mkdir(exist_ok=True)

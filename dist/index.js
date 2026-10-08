@@ -7,6 +7,13 @@
   document.head.appendChild(style);
 })();
 
+(function () {
+  if (window.__memoryTaskBundleLoaded) {
+    console.warn("Task bundle already loaded in this page; skipping the second load.");
+    return;
+  }
+  window.__memoryTaskBundleLoaded = true;
+
 // ---- js/config.js ----
 // Experiment configuration. Values can be overridden via URL query params for
 // quick local iteration, e.g. index.html?blockSizes=12,24&criterion=0.7
@@ -1463,3 +1470,5 @@ async function runExperiment() {
 
   jsPsych.run(timeline);
 }
+
+})();
